@@ -1,7 +1,7 @@
-import { GoogleGenAI } from '@google/genai'
+﻿import { GoogleGenAI } from '@google/genai'
 import type { RhymeData, RhymeScore, Storyboard, VideoScore, SocialCaptions, VideoData } from '@/types'
 
-const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY })
+const genai = new GoogleGenAI({ apiKey: (process.env.GOOGLE_API_KEY ?? '').replace(/\u{FEFF}/u, '') })
 
 function safeJSON<T>(text: string): T {
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -30,7 +30,7 @@ async function callGemini(system: string, user: string): Promise<string> {
   return response.text ?? ''
 }
 
-// ── Agent 1: Rhyme Generator ────────────────────────────────────────────────
+// â”€â”€ Agent 1: Rhyme Generator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function generateRhyme(feedback = '', version = 1): Promise<RhymeData> {
   const system = `You are a kids rhyme generator for toddlers aged 2-5.
 Return ONLY valid JSON with exactly this shape:
@@ -52,7 +52,7 @@ Rules:
   return { ...data, version, timestamp: new Date().toISOString() }
 }
 
-// ── Agent 2: Rhyme Reviewer ─────────────────────────────────────────────────
+// â”€â”€ Agent 2: Rhyme Reviewer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function reviewRhyme(rhyme: string): Promise<RhymeScore> {
   const system = `You are a children's content quality reviewer. Review the rhyme and return ONLY valid JSON.
 Scoring weights: entertainment 25%, educational 25%, ageAppropriate 20%, rhythm 10%, simplicity 10%, positiveMessage 10%.
@@ -75,16 +75,16 @@ Return exactly:
   return { ...data, total, approved: total > 7 }
 }
 
-// ── Agent 3: Storyboard Planner ─────────────────────────────────────────────
+// â”€â”€ Agent 3: Storyboard Planner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function planStoryboard(rhyme: string): Promise<Storyboard> {
   const system = `You are an animation storyboard planner for a 9:16 vertical kids video (30 seconds).
 Return ONLY valid JSON with exactly this shape:
 {
   "shots":[
-    {"timestamp":"0:00-0:02","emoji":"🦆","description":"...","camera":"...","bg":"linear-gradient(135deg,#1a0a2e,#2d1b4e)"},
-    {"timestamp":"0:02-0:12","emoji":"🌅","description":"...","camera":"...","bg":"linear-gradient(135deg,#0a1a2e,#0a2e1a)"},
-    {"timestamp":"0:12-0:22","emoji":"🎵","description":"...","camera":"...","bg":"linear-gradient(135deg,#1a2e0a,#2e1a0a)"},
-    {"timestamp":"0:22-0:30","emoji":"⭐","description":"...","camera":"...","bg":"linear-gradient(135deg,#2e0a1a,#0a2e2e)"}
+    {"timestamp":"0:00-0:02","emoji":"ðŸ¦†","description":"...","camera":"...","bg":"linear-gradient(135deg,#1a0a2e,#2d1b4e)"},
+    {"timestamp":"0:02-0:12","emoji":"ðŸŒ…","description":"...","camera":"...","bg":"linear-gradient(135deg,#0a1a2e,#0a2e1a)"},
+    {"timestamp":"0:12-0:22","emoji":"ðŸŽµ","description":"...","camera":"...","bg":"linear-gradient(135deg,#1a2e0a,#2e1a0a)"},
+    {"timestamp":"0:22-0:30","emoji":"â­","description":"...","camera":"...","bg":"linear-gradient(135deg,#2e0a1a,#0a2e2e)"}
   ],
   "musicStyle":"...",
   "voiceStyle":"...",
@@ -99,7 +99,7 @@ IMPORTANT: First shot MUST be a strong hook within first 2 seconds. Use kid-frie
   return safeJSON<Storyboard>(raw)
 }
 
-// ── Gemini Veo: Actual Video Generation ────────────────────────────────────
+// â”€â”€ Gemini Veo: Actual Video Generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function generateVideoWithVeo(
   prompt: string,
   onProgress?: (msg: string) => void,
@@ -124,7 +124,7 @@ export async function generateVideoWithVeo(
   let elapsed = 0
   while (!operation.done) {
     if (Date.now() >= deadline) {
-      onProgress?.('Veo timed out — continuing without video')
+      onProgress?.('Veo timed out â€” continuing without video')
       return null
     }
     await new Promise(r => setTimeout(r, 10000))
@@ -136,11 +136,11 @@ export async function generateVideoWithVeo(
   const videoBytes = operation.response?.generatedVideos?.[0]?.video?.videoBytes
   if (!videoBytes) throw new Error('Veo returned no video data')
 
-  onProgress?.('Video generated successfully ✓')
+  onProgress?.('Video generated successfully âœ“')
   return { base64: videoBytes, mimeType: 'video/mp4' }
 }
 
-// ── Agent 4: Video Generator (metadata + prompt) ────────────────────────────
+// â”€â”€ Agent 4: Video Generator (metadata + prompt) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function generateVideoMetadata(rhyme: string, storyboard: Storyboard): Promise<{
   videoPrompt: string
   audioScript: string
@@ -161,13 +161,13 @@ Generate detailed production metadata. Return ONLY valid JSON:
   return safeJSON(raw)
 }
 
-// ── Agent 5: Video Reviewer ──────────────────────────────────────────────────
+// â”€â”€ Agent 5: Video Reviewer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function reviewVideo(
   storyboard: Storyboard,
   rhyme: string,
   videoMeta: { videoPrompt: string; audioScript: string; subtitles: { time: string; text: string }[]; lipSyncMap: { word: string; startMs: number; endMs: number }[] }
 ): Promise<VideoScore> {
-  const system = `You are a kids video production plan reviewer. You evaluate the quality of a complete video production plan — NOT rendered video.
+  const system = `You are a kids video production plan reviewer. You evaluate the quality of a complete video production plan â€” NOT rendered video.
 Score each dimension 0-10 based on the plan's detail, clarity, and suitability for a kids animation:
 - videoQuality (20%): How detailed and clear is the visual/animation direction? Will it produce compelling visuals?
 - audioQuality (15%): How well-written is the audio script? Does it match the rhyme and mood?
@@ -198,7 +198,7 @@ Set approved=true if total > 7. Return ONLY valid JSON:
   return { ...data, total, approved: total > 7 }
 }
 
-// ── Agent 6: Social Publisher ────────────────────────────────────────────────
+// â”€â”€ Agent 6: Social Publisher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function generateSocialAssets(rhyme: string, storyboard: Storyboard, videoScore: VideoScore): Promise<SocialCaptions> {
   const system = `You are a social media manager for a kids content channel. Create platform-optimized captions.
 Return ONLY valid JSON with exactly this structure:
