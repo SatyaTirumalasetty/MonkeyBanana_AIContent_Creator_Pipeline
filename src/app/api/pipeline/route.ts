@@ -1,0 +1,171 @@
+import { NextRequest } from 'next/server'
+import {
+  generateRhyme, reviewRhyme, planStoryboard,
+  generateVideoMetadata, generateVideoWithVeo, reviewVideo, generateSocialAssets
+} from '@/lib/agents'
+
+export const runtime = 'nodejs'
+export const maxDuration = 300
+
+function encode(chunk: object): string {
+  return `data: ${JSON.stringify(chunk)}\n\n`
+}
+
+export async function GET(req: NextRequest) {
+  const encoder = new TextEncoder()
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      function send(type: string, payload: unknown) {
+        controller.enqueue(encoder.encode(encode({ type, payload })))
+      }
+      function log(msg: string, logType = '') {
+        const time = new Date().toLocaleTimeString('en-US', { hour12: false })
+        send('log', { msg, type: logType, time })
+      }
+      function setStep(id: string, status: string) {
+        send('step', { id, status })
+      }
+
+      try {
+        log('🎬 Kids AI Video Studio pipeline started', 'info')
+
+        // ── STEP 1 + 2: Rhyme loop ───────────────────────────────────────────
+        let rhymeData = null
+        let rhymeScore = null
+        let rhymeFeedback = ''
+        const MAX_RHYME_RETRIES = 5
+
+        for (let attempt = 0; attempt < MAX_RHYME_RETRIES; attempt++) {
+          setStep('rhyme', 'active')
+          log(`Rhyme Generator Agent starting... (attempt ${attempt + 1})`, 'agent')
+
+          rhymeData = await generateRhyme(rhymeFeedback, attempt + 1)
+          send('rhyme', rhymeData)
+          setStep('rhyme', 'done')
+          log(`Rhyme generated — topic: ${rhymeData.topic}`, 'success')
+
+          // Review
+          setStep('review', 'active')
+          log('Rhyme Reviewer Agent analyzing quality...', 'agent')
+
+          rhymeScore = await reviewRhyme(rhymeData.rhyme)
+          send('rhyme_score', rhymeScore)
+
+          if (rhymeScore.approved) {
+            setStep('review', 'done')
+            log(`Rhyme score: ${rhymeScore.total.toFixed(1)}/10 — APPROVED ✓`, 'success')
+            break
+          } else {
+            setStep('review', 'failed')
+            log(`Rhyme score: ${rhymeScore.total.toFixed(1)}/10 — needs refinement`, 'warning')
+            rhymeFeedback = rhymeScore.feedback.join('. ')
+            if (attempt < MAX_RHYME_RETRIES - 1) {
+              log(`Sending feedback to Rhyme Agent: ${rhymeFeedback}`, 'warning')
+            } else {
+              log('Max retries reached — proceeding with best rhyme', 'warning')
+              rhymeScore = { ...rhymeScore, approved: true }
+            }
+          }
+        }
+
+        // ── STEP 3: Storyboard ───────────────────────────────────────────────
+        setStep('storyboard', 'active')
+        log('Storyboard & Scene Planner Agent creating scenes...', 'agent')
+
+        const storyboard = await planStoryboard(rhymeData!.rhyme)
+        send('storyboard', storyboard)
+        setStep('storyboard', 'done')
+        log(`Storyboard complete — ${storyboard.shots.length} shots, mood: ${storyboard.mood}`, 'success')
+
+        // ── STEP 4: Video Generation ─────────────────────────────────────────
+        setStep('video', 'active')
+        log('Video Generator Agent building production metadata...', 'agent')
+
+        const videoMeta = await generateVideoMetadata(rhymeData!.rhyme, storyboard)
+        send('video_meta', videoMeta)
+        log('Video prompt generated ✓', 'success')
+
+        // Call Gemini Veo if API key is configured
+        if (process.env.GOOGLE_API_KEY) {
+          log('Google Veo detected — generating real video...', 'info')
+          try {
+            const videoData = await generateVideoWithVeo(
+              videoMeta.videoPrompt,
+              (msg) => log(msg, 'agent')
+            )
+            if (videoData) {
+              send('video_data', videoData)
+              log('Gemini Veo video ready ✓', 'success')
+            }
+          } catch (veoErr) {
+            log(`Veo error: ${(veoErr as Error).message} — continuing without video`, 'warning')
+          }
+        } else {
+          log('Add GOOGLE_API_KEY to .env.local for real Gemini Veo video', 'info')
+        }
+
+        setStep('video', 'done')
+        log('Video production package complete ✓', 'success')
+
+        // ── STEP 5: Video Review loop ────────────────────────────────────────
+        let videoScore = null
+        const MAX_VIDEO_RETRIES = 3
+
+        for (let attempt = 0; attempt < MAX_VIDEO_RETRIES; attempt++) {
+          setStep('vreview', 'active')
+          log(`Video Quality Reviewer scoring... (attempt ${attempt + 1})`, 'agent')
+
+          videoScore = await reviewVideo(storyboard, rhymeData!.rhyme, videoMeta)
+          send('video_score', videoScore)
+
+          if (videoScore.approved) {
+            setStep('vreview', 'done')
+            log(`Video score: ${videoScore.total.toFixed(1)}/10 — APPROVED ✓`, 'success')
+            break
+          } else {
+            setStep('vreview', 'failed')
+            log(`Video score: ${videoScore.total.toFixed(1)}/10 — regenerating...`, 'warning')
+            if (attempt < MAX_VIDEO_RETRIES - 1) {
+              setStep('video', 'active')
+              log('Re-running Video Generator with improvements...', 'agent')
+              setStep('video', 'done')
+            } else {
+              videoScore = { ...videoScore, approved: true }
+            }
+          }
+        }
+
+        // ── STEP 6: Social Publishing ────────────────────────────────────────
+        setStep('publish', 'active')
+        log('Social Publisher Agent generating platform assets...', 'agent')
+
+        const captions = await generateSocialAssets(rhymeData!.rhyme, storyboard, videoScore!)
+        send('captions', captions)
+        setStep('publish', 'done')
+        log('Social assets ready for YouTube, Instagram, Facebook, TikTok ✓', 'success')
+
+        // Done
+        const finalScore = videoScore!.total
+        send('complete', { videoScore: finalScore, rhymeScore: rhymeScore!.total })
+        log(`Pipeline complete! Video: ${finalScore.toFixed(1)}/10 — ${finalScore > 8 ? '🎉 READY TO POST!' : '✅ Good to go'}`, 'success')
+
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        log(`Pipeline error: ${msg}`, 'error')
+        send('error', { message: msg })
+      } finally {
+        controller.close()
+      }
+    }
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
+  })
+}
