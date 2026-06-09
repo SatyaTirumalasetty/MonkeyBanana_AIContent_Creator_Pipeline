@@ -50,6 +50,145 @@ function CopyButton({ text, label = 'Copy caption' }: { text: string; label?: st
   )
 }
 
+// ── Animated Storyboard Preview ───────────────────────────────────────────────
+function VideoPreview({ storyboard, rhyme, videoScore }: {
+  storyboard: Storyboard; rhyme: RhymeData; videoScore: VideoScore | null
+}) {
+  const [shotIdx, setShotIdx] = useState(0)
+  const [playing, setPlaying] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const lines = rhyme.rhyme.split('\n').filter(Boolean)
+  const shot = storyboard.shots[shotIdx]
+
+  useEffect(() => {
+    if (!playing) return
+    const id = setInterval(() => setShotIdx(i => (i + 1) % storyboard.shots.length), 7500)
+    return () => clearInterval(id)
+  }, [playing, storyboard.shots.length])
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  const toggleFullscreen = async () => {
+    if (!containerRef.current) return
+    if (!document.fullscreenElement) {
+      await containerRef.current.requestFullscreen()
+    } else {
+      await document.exitFullscreen()
+    }
+  }
+
+  const lineIdx = Math.min(
+    Math.floor(shotIdx * lines.length / storyboard.shots.length),
+    lines.length - 1
+  )
+
+  return (
+    <div ref={containerRef} className="relative overflow-hidden rounded-xl select-none"
+      style={{ aspectRatio: '9/16', background: shot.bg || 'linear-gradient(135deg,#1a0a2e,#2d1b4e)' }}>
+
+      {/* Shot content */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
+        <div className="text-6xl mb-3" style={{ animation: 'bounce 1s infinite' }}>{shot.emoji}</div>
+        <div className="text-[10px] font-semibold text-white/60 leading-relaxed line-clamp-3">{shot.description}</div>
+      </div>
+
+      {/* Camera label */}
+      <div className="absolute top-2 left-2 right-2 flex justify-between items-center">
+        <div className="bg-black/50 backdrop-blur-sm rounded-lg px-2 py-0.5 text-[9px] font-bold text-white/80">
+          SHOT {shotIdx + 1} / {storyboard.shots.length} · {shot.timestamp}
+        </div>
+        <div className="bg-violet-900/70 backdrop-blur-sm rounded-lg px-2 py-0.5 text-[9px] font-bold text-violet-200">
+          📷 {shot.camera?.split(',')[0]}
+        </div>
+      </div>
+
+      {/* Subtitle */}
+      <div className="absolute bottom-14 left-2 right-2">
+        <div className="bg-black/70 backdrop-blur-sm rounded-lg px-3 py-1.5 text-center text-[11px] font-bold text-white leading-snug">
+          {lines[lineIdx]}
+        </div>
+      </div>
+
+      {/* Controls bar */}
+      <div className="absolute bottom-0 left-0 right-0 px-3 py-2 flex items-center justify-between bg-black/50 backdrop-blur-sm">
+        <div className="flex gap-1">
+          {storyboard.shots.map((_, i) => (
+            <button key={i} onClick={() => { setShotIdx(i); setPlaying(false) }}
+              className="transition-all rounded-full bg-white/40 hover:bg-white/70"
+              style={{ width: i === shotIdx ? 14 : 6, height: 6, background: i === shotIdx ? 'white' : 'rgba(255,255,255,0.4)' }} />
+          ))}
+        </div>
+        <div className="flex gap-1.5">
+          {videoScore && (
+            <div className={`text-[9px] font-bold px-2 py-1 rounded-full ${videoScore.approved ? 'bg-emerald-900/70 text-emerald-300' : 'bg-amber-900/70 text-amber-300'}`}>
+              {videoScore.total.toFixed(1)}/10
+            </div>
+          )}
+          <button onClick={() => setPlaying(p => !p)}
+            className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-sm text-white transition-all">
+            {playing ? '⏸' : '▶'}
+          </button>
+          <button onClick={toggleFullscreen}
+            className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-sm text-white transition-all">
+            {isFullscreen ? '✕' : '⛶'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Real Video Player with fullscreen ─────────────────────────────────────────
+function VideoPlayer({ videoData, videoScore }: { videoData: VideoData; videoScore: VideoScore | null }) {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  const toggleFullscreen = async () => {
+    if (!containerRef.current) return
+    if (!document.fullscreenElement) {
+      await containerRef.current.requestFullscreen()
+    } else {
+      await document.exitFullscreen()
+    }
+  }
+
+  return (
+    <div ref={containerRef} className="relative rounded-xl overflow-hidden bg-black">
+      <video controls autoPlay loop playsInline
+        src={`data:${videoData.mimeType};base64,${videoData.base64}`}
+        className="w-full"
+        style={{ aspectRatio: '9/16', objectFit: 'cover' }}
+      />
+      <button onClick={toggleFullscreen}
+        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white text-sm transition-all backdrop-blur-sm border border-white/20">
+        {isFullscreen ? '✕' : '⛶'}
+      </button>
+      {videoScore && (
+        <div className={`text-center py-1.5 text-xs font-bold ${videoScore.approved ? 'bg-emerald-900/40 text-emerald-400' : 'bg-amber-900/40 text-amber-400'}`}>
+          Score: {videoScore.total.toFixed(1)}/10 {videoScore.approved ? '✅' : '⚠️'}
+        </div>
+      )}
+      <div className="px-3 py-2 text-[9px] text-violet-400 font-bold text-center bg-violet-950/30">
+        ✨ Generated by Gemini Veo
+      </div>
+    </div>
+  )
+}
+
+const CACHE_KEY = 'kids_studio_result'
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function Home() {
   const [steps, setSteps] = useState<Record<StepId, StepStatus>>({
@@ -65,10 +204,47 @@ export default function Home() {
   const [videoData, setVideoData] = useState<VideoData | null>(null)
   const [running, setRunning] = useState(false)
   const [complete, setComplete] = useState(false)
+  const [cachedAt, setCachedAt] = useState<string | null>(null)
+  const [publishedPlatforms, setPublishedPlatforms] = useState<Set<Platform>>(new Set())
   const [capTab, setCapTab] = useState<Platform>('youtube')
   const [showPublish, setShowPublish] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Load from cache on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CACHE_KEY)
+      if (!saved) return
+      const data = JSON.parse(saved)
+      if (!data.rhyme || !data.storyboard) return
+      setRhyme(data.rhyme)
+      setRhymeScore(data.rhymeScore ?? null)
+      setStoryboard(data.storyboard)
+      setVideoMeta(data.videoMeta ?? null)
+      setVideoScore(data.videoScore ?? null)
+      setVideoData(data.videoData ?? null)
+      setCaptions(data.captions ?? null)
+      setCachedAt(data.cachedAt ?? null)
+      if (data.publishedPlatforms?.length) setPublishedPlatforms(new Set(data.publishedPlatforms as Platform[]))
+      setComplete(true)
+      setSteps({ rhyme: 'done', review: 'done', storyboard: 'done', video: 'done', vreview: 'done', publish: 'done' })
+      setLogs([{ time: '--:--:--', msg: `Loaded previous result from cache (${data.cachedAt ?? 'earlier'})`, type: 'info' }])
+    } catch { /* corrupt cache — ignore */ }
+  }, [])
+
+  // Save to cache whenever pipeline completes
+  useEffect(() => {
+    if (!complete || !rhyme || !storyboard) return
+    try {
+      const ts = new Date().toLocaleString()
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        rhyme, rhymeScore, storyboard, videoMeta, videoScore, videoData, captions,
+        publishedPlatforms: Array.from(publishedPlatforms), cachedAt: ts,
+      }))
+      setCachedAt(ts)
+    } catch { /* storage quota exceeded */ }
+  }, [complete])
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
@@ -84,6 +260,9 @@ export default function Home() {
   }, [])
 
   const reset = useCallback(() => {
+    localStorage.removeItem(CACHE_KEY)
+    setCachedAt(null)
+    setPublishedPlatforms(new Set())
     setSteps({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', publish: 'idle' })
     setLogs([])
     setRhyme(null); setRhymeScore(null); setStoryboard(null)
@@ -158,12 +337,39 @@ export default function Home() {
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         addLog(`Connection error: ${(err as Error).message}`, 'error')
-        addLog('Make sure ANTHROPIC_API_KEY is set in your .env.local file', 'warning')
+        addLog('Make sure GOOGLE_API_KEY is set in your .env file', 'warning')
       }
     } finally {
       setRunning(false)
     }
   }, [running, reset, setStep, addLog])
+
+  // Keep publishedPlatforms in sync with cache without overwriting other fields
+  useEffect(() => {
+    if (!complete || !rhyme) return
+    try {
+      const saved = localStorage.getItem(CACHE_KEY)
+      if (!saved) return
+      const data = JSON.parse(saved)
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ...data, publishedPlatforms: Array.from(publishedPlatforms) }))
+    } catch { }
+  }, [publishedPlatforms, complete, rhyme])
+
+  const handleUpload = useCallback((platform: Platform, url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setPublishedPlatforms(prev => new Set([...prev, platform]))
+  }, [])
+
+  const clearAfterPublish = useCallback(() => {
+    localStorage.removeItem(CACHE_KEY)
+    setCachedAt(null)
+    setPublishedPlatforms(new Set())
+    setSteps({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', publish: 'idle' })
+    setLogs([{ time: new Date().toLocaleTimeString('en-US', { hour12: false }), msg: 'Published content cleared. Ready for new video.', type: 'success' }])
+    setRhyme(null); setRhymeScore(null); setStoryboard(null)
+    setVideoScore(null); setCaptions(null); setVideoMeta(null); setVideoData(null)
+    setComplete(false); setShowPublish(false)
+  }, [])
 
   const getCapText = (platform: Platform) => {
     if (!captions) return ''
@@ -192,13 +398,20 @@ export default function Home() {
             <h1 className="text-2xl font-bold" style={{ fontFamily: "'Fredoka One', cursive", background: 'linear-gradient(135deg,#ff6b9d,#c77dff,#4cc9f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               🎬 Kids AI Video Studio
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">Autonomous 6-agent pipeline · Real Claude AI · SSE streaming</p>
+            <p className="text-xs text-slate-500 mt-0.5">Autonomous 6-agent pipeline · Powered by Gemini AI · SSE streaming</p>
           </div>
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-full px-4 py-2">
-            <div className={`w-2 h-2 rounded-full ${running ? 'bg-emerald-400 animate-pulse' : complete ? 'bg-violet-400' : 'bg-slate-600'}`} />
-            <span className="text-xs font-bold text-slate-300">
-              {running ? 'Pipeline Running' : complete ? (isReady ? '🎉 Ready to Post' : '✅ Complete') : 'Ready'}
-            </span>
+          <div className="flex items-center gap-2">
+            {cachedAt && !running && (
+              <div className="flex items-center gap-1.5 bg-violet-950/60 border border-violet-700 rounded-full px-3 py-1.5">
+                <span className="text-[10px] text-violet-300">💾 Cached · {cachedAt}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-full px-4 py-2">
+              <div className={`w-2 h-2 rounded-full ${running ? 'bg-emerald-400 animate-pulse' : complete ? 'bg-violet-400' : 'bg-slate-600'}`} />
+              <span className="text-xs font-bold text-slate-300">
+                {running ? 'Pipeline Running' : complete ? (isReady ? '🎉 Ready to Post' : '✅ Complete') : 'Ready'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -370,10 +583,11 @@ export default function Home() {
                       </div>
                       <div className="flex gap-2">
                         <CopyButton text={getCapText(capTab)} />
-                        <a href={pm.url} target="_blank" rel="noopener noreferrer"
+                        <button
+                          onClick={() => handleUpload(capTab, pm.url)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-700 border border-slate-600 text-slate-200 hover:border-violet-500 hover:text-violet-300 transition-all">
                           ↗ Open {pm.name}
-                        </a>
+                        </button>
                       </div>
                     </div>
                   )
@@ -402,32 +616,54 @@ export default function Home() {
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">Post to Social Media</div>
                 <div className="bg-amber-950/40 border border-amber-800 rounded-xl p-3 text-[11px] text-amber-300 mb-4">
-                  <strong>Workflow:</strong> 1) Copy the caption for each platform → 2) Click "Upload" to open the platform → 3) Paste caption + upload your video file
+                  <strong>Workflow:</strong> 1) Copy the caption → 2) Click "Upload" to open the platform → 3) Paste caption + upload your video file
                 </div>
                 <div className="flex flex-col gap-3">
                   {(['youtube', 'instagram', 'facebook', 'tiktok'] as Platform[]).map(pid => {
                     const pm = PLATFORM_META[pid]
                     const c = captions[pid]
                     const txt = getCapText(pid)
+                    const published = publishedPlatforms.has(pid)
                     return (
-                      <div key={pid} className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-center gap-4">
-                        <div className="text-2xl">{pm.icon}</div>
+                      <div key={pid} className={`border rounded-xl p-4 flex items-center gap-4 transition-all ${published ? 'bg-emerald-950/30 border-emerald-700' : 'bg-slate-800 border-slate-700'}`}>
+                        <div className="text-2xl">{published ? '✅' : pm.icon}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-sm text-white">{pm.name}</div>
+                          <div className="font-bold text-sm text-white flex items-center gap-2">
+                            {pm.name}
+                            {published && <span className="text-[9px] font-bold bg-emerald-900/60 text-emerald-400 border border-emerald-700 rounded-full px-2 py-0.5">PUBLISHED</span>}
+                          </div>
                           <div className="text-[10px] text-slate-400">{pm.desc}</div>
                           <div className="text-[10px] text-slate-500 mt-0.5 truncate">{c.title}</div>
                         </div>
                         <div className="flex gap-2 shrink-0">
                           <CopyButton text={txt} label="Copy" />
-                          <a href={pm.url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-violet-900/50 border border-violet-600 text-violet-200 hover:bg-violet-900 transition-all">
-                            ↗ Upload
-                          </a>
+                          <button
+                            onClick={() => handleUpload(pid, pm.url)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${published ? 'bg-emerald-900/40 border-emerald-700 text-emerald-300' : 'bg-violet-900/50 border-violet-600 text-violet-200 hover:bg-violet-900'}`}>
+                            {published ? '↗ Re-upload' : '↗ Upload'}
+                          </button>
                         </div>
                       </div>
                     )
                   })}
                 </div>
+
+                {/* Clear after publish */}
+                {publishedPlatforms.size > 0 && (
+                  <div className="mt-4 p-4 bg-emerald-950/40 border border-emerald-700 rounded-xl flex items-center justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-bold text-emerald-300">
+                        {publishedPlatforms.size === 4 ? '🎉 Published to all platforms!' : `✅ Published to ${publishedPlatforms.size} platform${publishedPlatforms.size > 1 ? 's' : ''}`}
+                      </div>
+                      <div className="text-[11px] text-emerald-500 mt-0.5">Clear this video from storage to make room for the next one.</div>
+                    </div>
+                    <button
+                      onClick={clearAfterPublish}
+                      className="shrink-0 px-4 py-2 rounded-xl text-[11px] font-bold bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600 transition-all">
+                      🗑 Clear & New Video
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -440,46 +676,9 @@ export default function Home() {
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Video Package</div>
               <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
                 {videoData ? (
-                  <div>
-                    <video
-                      controls
-                      autoPlay
-                      loop
-                      playsInline
-                      src={`data:${videoData.mimeType};base64,${videoData.base64}`}
-                      className="w-full rounded-t-xl"
-                      style={{ aspectRatio: '9/16', objectFit: 'cover' }}
-                    />
-                    {videoScore && (
-                      <div className={`text-center py-2 text-xs font-bold ${videoScore.approved ? 'bg-emerald-900/40 text-emerald-400' : 'bg-amber-900/40 text-amber-400'}`}>
-                        Score: {videoScore.total.toFixed(1)}/10 {videoScore.approved ? '✅' : '⚠️'}
-                      </div>
-                    )}
-                    <div className="px-3 py-2 text-[9px] text-violet-400 font-bold text-center bg-violet-950/30">
-                      ✨ Generated by Gemini Veo
-                    </div>
-                  </div>
-                ) : videoMeta ? (
-                  <div className="p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-16 rounded-lg flex items-center justify-center text-2xl shrink-0" style={{ background: storyboard?.shots?.[0]?.bg || 'linear-gradient(135deg,#1a0a2e,#2d1b4e)' }}>
-                        {storyboard?.shots?.[0]?.emoji || '🎬'}
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-white">Kids Rhyme Video</div>
-                        <div className="text-[10px] text-slate-400">9:16 · HD + 4K ready</div>
-                        <div className="text-[10px] text-slate-400">{storyboard?.characters?.slice(0, 2).join(', ')}</div>
-                      </div>
-                    </div>
-                    {videoScore && (
-                      <div className={`text-center py-2 rounded-lg text-xs font-bold ${videoScore.approved ? 'bg-emerald-900/40 text-emerald-400' : 'bg-amber-900/40 text-amber-400'}`}>
-                        Score: {videoScore.total.toFixed(1)}/10 {videoScore.approved ? '✅' : '⚠️'}
-                      </div>
-                    )}
-                    <div className="mt-3 pt-3 border-t border-slate-700">
-                      <div className="text-[10px] text-slate-400 mb-2">Add GOOGLE_API_KEY to generate real video with Veo</div>
-                    </div>
-                  </div>
+                  <VideoPlayer videoData={videoData} videoScore={videoScore} />
+                ) : storyboard && rhyme ? (
+                  <VideoPreview storyboard={storyboard} rhyme={rhyme} videoScore={videoScore} />
                 ) : (
                   <div className="h-36 flex flex-col items-center justify-center gap-2">
                     {running ? (
@@ -529,7 +728,7 @@ export default function Home() {
                 {running ? (
                   <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Running Pipeline...</>
                 ) : (
-                  <><span>✨</span>{complete ? 'Generate New Rhyme' : 'Generate Rhyme'}</>
+                  <><span>✨</span>{cachedAt ? '🔄 Generate New Rhyme' : complete ? 'Generate New Rhyme' : 'Generate Rhyme'}</>
                 )}
               </button>
 
