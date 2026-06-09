@@ -102,7 +102,8 @@ IMPORTANT: First shot MUST be a strong hook within first 2 seconds. Use kid-frie
 // ── Gemini Veo: Actual Video Generation ────────────────────────────────────
 export async function generateVideoWithVeo(
   prompt: string,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  maxWaitMs = 50000
 ): Promise<VideoData | null> {
   if (!process.env.GOOGLE_API_KEY) return null
 
@@ -119,9 +120,13 @@ export async function generateVideoWithVeo(
     },
   })
 
-  // Poll every 10 seconds for up to ~4 minutes
+  const deadline = Date.now() + maxWaitMs
   let elapsed = 0
   while (!operation.done) {
+    if (Date.now() >= deadline) {
+      onProgress?.('Veo timed out — continuing without video')
+      return null
+    }
     await new Promise(r => setTimeout(r, 10000))
     elapsed += 10
     onProgress?.(`Veo generating video... (${elapsed}s elapsed)`)
