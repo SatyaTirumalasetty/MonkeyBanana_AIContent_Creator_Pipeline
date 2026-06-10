@@ -108,6 +108,42 @@ export interface VideoData {
 }
 
 export interface StreamChunk {
-  type: 'log' | 'step' | 'rhyme' | 'rhyme_score' | 'storyboard' | 'video_meta' | 'video_data' | 'video_score' | 'captions' | 'complete' | 'error'
+  type: 'log' | 'step' | 'rhyme' | 'rhyme_score' | 'storyboard' | 'video_meta' | 'video_data' | 'video_score' | 'captions' | 'job' | 'complete' | 'error'
   payload: unknown
+}
+
+export interface VideoMeta {
+  videoPrompt: string
+  audioScript: string
+  subtitles: { time: string; text: string }[]
+  lipSyncMap: { word: string; startMs: number; endMs: number }[]
+}
+
+export type ClipStatus = 'pending' | 'generating' | 'done' | 'error'
+
+export interface ClipState {
+  index: number
+  prompt: string
+  durationSec: number
+  status: ClipStatus
+  url?: string
+  error?: string
+  operationName?: string
+}
+
+export type JobStatus = 'pending' | 'generating_clips' | 'stitching' | 'complete' | 'error'
+
+export interface VideoJob {
+  id: string
+  createdAt: string
+  status: JobStatus
+  rhyme: RhymeData
+  rhymeScore: RhymeScore
+  storyboard: Storyboard
+  videoMeta: VideoMeta
+  clipDurationSec: number
+  targetDurationSec: number
+  clips: ClipState[]
+  finalVideoUrl?: string
+  error?: string
 }

@@ -1,8 +1,11 @@
 import { NextRequest } from 'next/server'
 import {
   generateRhyme, reviewRhyme, planStoryboard,
-  generateVideoMetadata, generateVideoWithVeo, reviewVideo, generateSocialAssets
+  generateVideoMetadata, reviewVideo, generateSocialAssets,
+  buildClipPrompt, NUM_CLIPS, CLIP_DURATION_SEC, TARGET_DURATION_SEC,
 } from '@/lib/agents'
+import { createJobId, saveJob } from '@/lib/jobStore'
+import type { ClipState, VideoJob } from '@/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -30,6 +33,7 @@ export async function GET(req: NextRequest) {
 
       try {
         log('🎬 Kids AI Video Studio pipeline started', 'info')
+        log(`Target video length: ~${TARGET_DURATION_SEC}s across ${NUM_CLIPS} clips of ${CLIP_DURATION_SEC}s each`, 'info')
 
         // ── STEP 1 + 2: Rhyme loop ───────────────────────────────────────────
         let rhymeData = null
@@ -72,40 +76,19 @@ export async function GET(req: NextRequest) {
 
         // ── STEP 3: Storyboard ───────────────────────────────────────────────
         setStep('storyboard', 'active')
-        log('Storyboard & Scene Planner Agent creating scenes...', 'agent')
+        log(`Storyboard & Scene Planner Agent creating ${NUM_CLIPS} scenes...`, 'agent')
 
         const storyboard = await planStoryboard(rhymeData!.rhyme)
         send('storyboard', storyboard)
         setStep('storyboard', 'done')
         log(`Storyboard complete — ${storyboard.shots.length} shots, mood: ${storyboard.mood}`, 'success')
 
-        // ── STEP 4: Video Generation ─────────────────────────────────────────
+        // ── STEP 4: Video Generator (production metadata) ───────────────────
         setStep('video', 'active')
         log('Video Generator Agent building production metadata...', 'agent')
 
         const videoMeta = await generateVideoMetadata(rhymeData!.rhyme, storyboard)
         send('video_meta', videoMeta)
-        log('Video prompt generated ✓', 'success')
-
-        // Call Gemini Veo if API key is configured
-        if (process.env.GOOGLE_API_KEY) {
-          log('Google Veo detected — generating real video...', 'info')
-          try {
-            const videoData = await generateVideoWithVeo(
-              videoMeta.videoPrompt,
-              (msg) => log(msg, 'agent')
-            )
-            if (videoData) {
-              send('video_data', videoData)
-              log('Gemini Veo video ready ✓', 'success')
-            }
-          } catch (veoErr) {
-            log(`Veo error: ${(veoErr as Error).message} — continuing without video`, 'warning')
-          }
-        } else {
-          log('Add GOOGLE_API_KEY to .env.local for real Gemini Veo video', 'info')
-        }
-
         setStep('video', 'done')
         log('Video production package complete ✓', 'success')
 
@@ -126,12 +109,8 @@ export async function GET(req: NextRequest) {
             break
           } else {
             setStep('vreview', 'failed')
-            log(`Video score: ${videoScore.total.toFixed(1)}/10 — regenerating...`, 'warning')
-            if (attempt < MAX_VIDEO_RETRIES - 1) {
-              setStep('video', 'active')
-              log('Re-running Video Generator with improvements...', 'agent')
-              setStep('video', 'done')
-            } else {
+            log(`Video score: ${videoScore.total.toFixed(1)}/10 — regenerating plan...`, 'warning')
+            if (attempt >= MAX_VIDEO_RETRIES - 1) {
               videoScore = { ...videoScore, approved: true }
             }
           }
@@ -146,10 +125,41 @@ export async function GET(req: NextRequest) {
         setStep('publish', 'done')
         log('Social assets ready for YouTube, Instagram, Facebook, TikTok ✓', 'success')
 
+        // ── Create video generation job ──────────────────────────────────────
+        if (process.env.GOOGLE_API_KEY) {
+          setStep('render', 'active')
+          log('Creating video render job...', 'agent')
+
+          const clips: ClipState[] = storyboard.shots.map((shot, i) => ({
+            index: i,
+            prompt: buildClipPrompt(videoMeta.videoPrompt, storyboard, shot),
+            durationSec: CLIP_DURATION_SEC,
+            status: 'pending',
+          }))
+
+          const job: VideoJob = {
+            id: await createJobId(),
+            createdAt: new Date().toISOString(),
+            status: 'generating_clips',
+            rhyme: rhymeData!,
+            rhymeScore: rhymeScore!,
+            storyboard,
+            videoMeta,
+            clipDurationSec: CLIP_DURATION_SEC,
+            targetDurationSec: TARGET_DURATION_SEC,
+            clips,
+          }
+          await saveJob(job)
+          send('job', job)
+          log(`Render job ${job.id} created — ${clips.length} clips queued (~${job.targetDurationSec}s total)`, 'success')
+        } else {
+          log('Add GOOGLE_API_KEY to .env.local to enable real Gemini Veo video rendering', 'info')
+        }
+
         // Done
         const finalScore = videoScore!.total
         send('complete', { videoScore: finalScore, rhymeScore: rhymeScore!.total })
-        log(`Pipeline complete! Video: ${finalScore.toFixed(1)}/10 — ${finalScore > 8 ? '🎉 READY TO POST!' : '✅ Good to go'}`, 'success')
+        log(`Pre-production complete! Plan: ${finalScore.toFixed(1)}/10 — ${finalScore > 8 ? '🎉 Looking great!' : '✅ Good to go'}`, 'success')
 
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error'

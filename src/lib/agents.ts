@@ -1,5 +1,5 @@
 ﻿import { GoogleGenAI } from '@google/genai'
-import type { RhymeData, RhymeScore, Storyboard, VideoScore, SocialCaptions, VideoData } from '@/types'
+import type { RhymeData, RhymeScore, Storyboard, StoryboardShot, VideoScore, SocialCaptions } from '@/types'
 
 const genai = new GoogleGenAI({ apiKey: (process.env.GOOGLE_API_KEY ?? '').replace(/\u{FEFF}/u, '') })
 
@@ -16,18 +16,40 @@ function safeJSON<T>(text: string): T {
   return JSON.parse(clean.slice(start, end + 1)) as T
 }
 
-async function callGemini(system: string, user: string): Promise<string> {
+async function callGemini(system: string, user: string, maxOutputTokens = 4096): Promise<string> {
   const response = await genai.models.generateContent({
     model: 'gemini-2.5-flash-lite',
     contents: [{ role: 'user', parts: [{ text: user }] }],
     config: {
       systemInstruction: system,
-      maxOutputTokens: 4096,
+      maxOutputTokens,
       responseMimeType: 'application/json',
       thinkingConfig: { thinkingBudget: 0 },
     },
   })
   return response.text ?? ''
+}
+
+// ── Long-form video config ────────────────────────────────────────────────
+// Veo generates one clip at a time (max ~8s each). A long video is assembled
+// from many clips stitched together. Tune via env vars — more clips = more
+// Veo API cost and total generation time (each clip can take 1-6 min).
+export const CLIP_DURATION_SEC = Number(process.env.VIDEO_CLIP_DURATION_SEC || 8)
+export const TARGET_DURATION_SEC = Number(process.env.VIDEO_TARGET_DURATION_SEC || 300)
+export const NUM_CLIPS = Math.max(1, Math.ceil(TARGET_DURATION_SEC / CLIP_DURATION_SEC))
+
+const BG_PALETTE = [
+  'linear-gradient(135deg,#1a0a2e,#2d1b4e)',
+  'linear-gradient(135deg,#0a1a2e,#0a2e1a)',
+  'linear-gradient(135deg,#1a2e0a,#2e1a0a)',
+  'linear-gradient(135deg,#2e0a1a,#0a2e2e)',
+  'linear-gradient(135deg,#2e1a0a,#1a0a2e)',
+  'linear-gradient(135deg,#0a2e2e,#2e0a2e)',
+]
+
+function formatTimestamp(startSec: number, endSec: number): string {
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return `${fmt(startSec)}-${fmt(endSec)}`
 }
 
 // â”€â”€ Agent 1: Rhyme Generator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -76,15 +98,17 @@ Return exactly:
 }
 
 // â”€â”€ Agent 3: Storyboard Planner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export async function planStoryboard(rhyme: string): Promise<Storyboard> {
-  const system = `You are an animation storyboard planner for a 9:16 vertical kids video (30 seconds).
+export async function planStoryboard(
+  rhyme: string,
+  numShots = NUM_CLIPS,
+  clipDurationSec = CLIP_DURATION_SEC
+): Promise<Storyboard> {
+  const totalSec = numShots * clipDurationSec
+  const system = `You are an animation storyboard planner for a 9:16 vertical kids video (~${totalSec} seconds total, made of ${numShots} shots of ${clipDurationSec}s each).
 Return ONLY valid JSON with exactly this shape:
 {
   "shots":[
-    {"timestamp":"0:00-0:02","emoji":"ðŸ¦†","description":"...","camera":"...","bg":"linear-gradient(135deg,#1a0a2e,#2d1b4e)"},
-    {"timestamp":"0:02-0:12","emoji":"ðŸŒ…","description":"...","camera":"...","bg":"linear-gradient(135deg,#0a1a2e,#0a2e1a)"},
-    {"timestamp":"0:12-0:22","emoji":"ðŸŽµ","description":"...","camera":"...","bg":"linear-gradient(135deg,#1a2e0a,#2e1a0a)"},
-    {"timestamp":"0:22-0:30","emoji":"â­","description":"...","camera":"...","bg":"linear-gradient(135deg,#2e0a1a,#0a2e2e)"}
+    {"emoji":"...","description":"...","camera":"..."}
   ],
   "musicStyle":"...",
   "voiceStyle":"...",
@@ -93,51 +117,127 @@ Return ONLY valid JSON with exactly this shape:
   "backgroundStyle":"...",
   "narratorTiming":"..."
 }
-IMPORTANT: First shot MUST be a strong hook within first 2 seconds. Use kid-friendly vivid descriptions.`
+Rules:
+- Return EXACTLY ${numShots} shots in the "shots" array, in narrative order.
+- Each shot description must be SHORT (max 15 words) and describe one continuous animated scene.
+- The first shot MUST be a strong hook.
+- Build a long visual journey that extends and loops the rhyme's characters, theme and colors across many fun mini-scenes -- keep it cohesive and age-appropriate for toddlers 2-5.
+- Vary emoji and camera angles across shots for visual interest.`
 
-  const raw = await callGemini(system, `Create a 4-shot storyboard for this kids rhyme (9:16 vertical format):\n\n${rhyme}`)
-  return safeJSON<Storyboard>(raw)
+  const raw = await callGemini(
+    system,
+    `Create a ${numShots}-shot storyboard (9:16 vertical) for this kids rhyme:\n\n${rhyme}`,
+    8192
+  )
+  const data = safeJSON<{
+    shots: { emoji: string; description: string; camera: string }[]
+    musicStyle: string
+    voiceStyle: string
+    characters: string[]
+    mood: string
+    backgroundStyle: string
+    narratorTiming: string
+  }>(raw)
+
+  const rawShots = data.shots ?? []
+  const shots: StoryboardShot[] = []
+  for (let i = 0; i < numShots; i++) {
+    const s = rawShots[i] ?? rawShots[rawShots.length - 1] ?? {
+      emoji: '⭐', description: 'A joyful continuation of the story', camera: 'medium shot',
+    }
+    shots.push({
+      timestamp: formatTimestamp(i * clipDurationSec, (i + 1) * clipDurationSec),
+      emoji: s.emoji,
+      description: s.description,
+      camera: s.camera,
+      bg: BG_PALETTE[i % BG_PALETTE.length],
+    })
+  }
+
+  return { ...data, shots }
 }
 
 // â”€â”€ Gemini Veo: Actual Video Generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export async function generateVideoWithVeo(
+export interface VeoClipResult {
+  status: 'done' | 'pending' | 'error'
+  bytes?: Buffer
+  mimeType?: string
+  operationName?: string
+  error?: string
+}
+
+// Generates (or resumes) a single Veo clip. Bounded to maxWaitMs so it fits
+// within a single serverless invocation; if the operation is still running
+// when time runs out, returns status 'pending' with an operationName that
+// can be passed back in to resume polling on the next call.
+export async function generateVeoClip(
   prompt: string,
-  onProgress?: (msg: string) => void,
-  maxWaitMs = 50000
-): Promise<VideoData | null> {
-  if (!process.env.GOOGLE_API_KEY) return null
+  opts: {
+    durationSeconds?: number
+    operationName?: string
+    maxWaitMs?: number
+    onProgress?: (msg: string) => void
+  } = {}
+): Promise<VeoClipResult> {
+  if (!process.env.GOOGLE_API_KEY) return { status: 'error', error: 'GOOGLE_API_KEY not configured' }
 
-  onProgress?.('Submitting prompt to Gemini Veo...')
+  const { durationSeconds = CLIP_DURATION_SEC, maxWaitMs = 270000, onProgress } = opts
 
-  let operation = await genai.models.generateVideos({
-    model: 'veo-2.0-generate-001',
-    prompt,
-    config: {
-      aspectRatio: '9:16',
-      numberOfVideos: 1,
-      durationSeconds: 8,
-      personGeneration: 'dont_allow',
-    },
-  })
+  let operation
+  if (opts.operationName) {
+    onProgress?.('Resuming Veo operation...')
+    operation = await genai.operations.getVideosOperation({
+      operation: { name: opts.operationName } as Parameters<typeof genai.operations.getVideosOperation>[0]['operation'],
+    })
+  } else {
+    onProgress?.('Submitting prompt to Gemini Veo...')
+    operation = await genai.models.generateVideos({
+      model: 'veo-2.0-generate-001',
+      prompt,
+      config: {
+        aspectRatio: '9:16',
+        numberOfVideos: 1,
+        durationSeconds,
+        personGeneration: 'dont_allow',
+      },
+    })
+  }
 
   const deadline = Date.now() + maxWaitMs
   let elapsed = 0
   while (!operation.done) {
     if (Date.now() >= deadline) {
-      onProgress?.('Veo timed out â€” continuing without video')
-      return null
+      onProgress?.('Still generating — will resume on next call')
+      return { status: 'pending', operationName: operation.name }
     }
     await new Promise(r => setTimeout(r, 10000))
     elapsed += 10
-    onProgress?.(`Veo generating video... (${elapsed}s elapsed)`)
+    onProgress?.(`Veo generating clip... (${elapsed}s elapsed)`)
     operation = await genai.operations.getVideosOperation({ operation })
   }
 
-  const videoBytes = operation.response?.generatedVideos?.[0]?.video?.videoBytes
-  if (!videoBytes) throw new Error('Veo returned no video data')
+  const video = operation.response?.generatedVideos?.[0]?.video
+  if (!video) {
+    const opError = (operation as { error?: { message?: string } }).error
+    console.error('Veo operation finished with no video:', JSON.stringify(operation))
+    return { status: 'error', error: opError?.message ?? 'Veo returned no video data' }
+  }
 
-  onProgress?.('Video generated successfully âœ“')
-  return { base64: videoBytes, mimeType: 'video/mp4' }
+  if (video.videoBytes) {
+    onProgress?.('Clip generated ✓')
+    return { status: 'done', bytes: Buffer.from(video.videoBytes, 'base64'), mimeType: 'video/mp4' }
+  }
+
+  if (video.uri) {
+    onProgress?.('Downloading generated clip...')
+    const res = await fetch(video.uri, { headers: { 'x-goog-api-key': process.env.GOOGLE_API_KEY! } })
+    if (!res.ok) return { status: 'error', error: `Failed to download Veo clip: ${res.status}` }
+    const bytes = Buffer.from(await res.arrayBuffer())
+    onProgress?.('Clip generated ✓')
+    return { status: 'done', bytes, mimeType: res.headers.get('content-type') || 'video/mp4' }
+  }
+
+  return { status: 'error', error: 'Veo returned no video data' }
 }
 
 // â”€â”€ Agent 4: Video Generator (metadata + prompt) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -154,11 +254,27 @@ Generate detailed production metadata. Return ONLY valid JSON:
   "audioScript":"full narration script with tone directions...",
   "subtitles":[{"time":"0:00","text":"..."},{"time":"0:03","text":"..."}],
   "lipSyncMap":[{"word":"duck","startMs":0,"endMs":300}]
-}`
+}
+
+IMPORTANT for "videoPrompt": the video generator is configured to NOT depict any
+people (no humans, no children, no babies, no human hands/faces/bodies). All
+characters MUST be animals, anthropomorphized objects, or fantasy creatures —
+never human children or people, even in passing references (e.g. do not write
+"a child wearing jeans"; instead describe the object itself, like "a pair of
+blue jeans on a clothesline").`
 
   const raw = await callGemini(system,
     `Generate video production metadata for this kids rhyme:\n${rhyme}\n\nStoryboard mood: ${storyboard.mood}\nCharacters: ${storyboard.characters.join(', ')}\nMusic: ${storyboard.musicStyle}`)
   return safeJSON(raw)
+}
+
+// ── Per-clip Veo prompt builder ─────────────────────────────────────────────
+export function buildClipPrompt(
+  videoPrompt: string,
+  storyboard: Storyboard,
+  shot: StoryboardShot
+): string {
+  return `${videoPrompt}\n\nThis clip: ${shot.description}\nCamera: ${shot.camera}\nMood: ${storyboard.mood}\nVisual style: ${storyboard.backgroundStyle}\nCharacters: ${storyboard.characters.join(', ')}\n9:16 vertical kids animation, ${CLIP_DURATION_SEC} seconds, no on-screen text or captions.`
 }
 
 // â”€â”€ Agent 5: Video Reviewer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

@@ -1,10 +1,10 @@
 'use client'
 import { useState, useRef, useCallback, useEffect } from 'react'
-import type { LogEntry, RhymeData, RhymeScore, Storyboard, VideoScore, SocialCaptions, VideoData, Platform } from '@/types'
+import type { LogEntry, RhymeData, RhymeScore, Storyboard, VideoScore, SocialCaptions, VideoMeta, VideoJob, Platform } from '@/types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type StepStatus = 'idle' | 'active' | 'done' | 'failed'
-type StepId = 'rhyme' | 'review' | 'storyboard' | 'video' | 'vreview' | 'publish'
+type StepId = 'rhyme' | 'review' | 'storyboard' | 'video' | 'vreview' | 'render' | 'publish'
 
 const STEPS: { id: StepId; icon: string; name: string; sub: string }[] = [
   { id: 'rhyme',      icon: '✍️', name: 'Rhyme Generator',    sub: 'Generating rhyme' },
@@ -12,6 +12,7 @@ const STEPS: { id: StepId; icon: string; name: string; sub: string }[] = [
   { id: 'storyboard', icon: '🎨', name: 'Storyboard Planner', sub: 'Planning scenes' },
   { id: 'video',      icon: '🎬', name: 'Video Generator',    sub: 'Building package' },
   { id: 'vreview',    icon: '⭐', name: 'Video Reviewer',     sub: 'Quality check' },
+  { id: 'render',     icon: '🎥', name: 'Video Renderer',     sub: 'Rendering clips' },
   { id: 'publish',    icon: '🚀', name: 'Social Publisher',   sub: 'Preparing assets' },
 ]
 
@@ -145,7 +146,7 @@ function VideoPreview({ storyboard, rhyme, videoScore }: {
 }
 
 // ── Real Video Player with fullscreen ─────────────────────────────────────────
-function VideoPlayer({ videoData, videoScore }: { videoData: VideoData; videoScore: VideoScore | null }) {
+function VideoPlayer({ videoUrl, videoScore }: { videoUrl: string; videoScore: VideoScore | null }) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -167,7 +168,7 @@ function VideoPlayer({ videoData, videoScore }: { videoData: VideoData; videoSco
   return (
     <div ref={containerRef} className="relative rounded-xl overflow-hidden bg-black">
       <video controls autoPlay loop playsInline
-        src={`data:${videoData.mimeType};base64,${videoData.base64}`}
+        src={videoUrl}
         className="w-full"
         style={{ aspectRatio: '9/16', objectFit: 'cover' }}
       />
@@ -192,7 +193,7 @@ const CACHE_KEY = 'kids_studio_result'
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function Home() {
   const [steps, setSteps] = useState<Record<StepId, StepStatus>>({
-    rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', publish: 'idle'
+    rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle'
   })
   const [logs, setLogs] = useState<LogEntry[]>([{ time: '--:--:--', msg: 'Studio ready. Click Generate Rhyme to start.', type: '' }])
   const [rhyme, setRhyme] = useState<RhymeData | null>(null)
@@ -200,8 +201,8 @@ export default function Home() {
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null)
   const [videoScore, setVideoScore] = useState<VideoScore | null>(null)
   const [captions, setCaptions] = useState<SocialCaptions | null>(null)
-  const [videoMeta, setVideoMeta] = useState<{ videoPrompt: string; audioScript: string } | null>(null)
-  const [videoData, setVideoData] = useState<VideoData | null>(null)
+  const [videoMeta, setVideoMeta] = useState<VideoMeta | null>(null)
+  const [job, setJob] = useState<VideoJob | null>(null)
   const [running, setRunning] = useState(false)
   const [complete, setComplete] = useState(false)
   const [cachedAt, setCachedAt] = useState<string | null>(null)
@@ -223,12 +224,12 @@ export default function Home() {
       setStoryboard(data.storyboard)
       setVideoMeta(data.videoMeta ?? null)
       setVideoScore(data.videoScore ?? null)
-      setVideoData(data.videoData ?? null)
+      setJob(data.job ?? null)
       setCaptions(data.captions ?? null)
       setCachedAt(data.cachedAt ?? null)
       if (data.publishedPlatforms?.length) setPublishedPlatforms(new Set(data.publishedPlatforms as Platform[]))
       setComplete(true)
-      setSteps({ rhyme: 'done', review: 'done', storyboard: 'done', video: 'done', vreview: 'done', publish: 'done' })
+      setSteps({ rhyme: 'done', review: 'done', storyboard: 'done', video: 'done', vreview: 'done', render: data.job?.finalVideoUrl ? 'done' : 'idle', publish: 'done' })
       setLogs([{ time: '--:--:--', msg: `Loaded previous result from cache (${data.cachedAt ?? 'earlier'})`, type: 'info' }])
     } catch { /* corrupt cache — ignore */ }
   }, [])
@@ -239,7 +240,7 @@ export default function Home() {
     try {
       const ts = new Date().toLocaleString()
       localStorage.setItem(CACHE_KEY, JSON.stringify({
-        rhyme, rhymeScore, storyboard, videoMeta, videoScore, videoData, captions,
+        rhyme, rhymeScore, storyboard, videoMeta, videoScore, job, captions,
         publishedPlatforms: Array.from(publishedPlatforms), cachedAt: ts,
       }))
       setCachedAt(ts)
@@ -263,12 +264,74 @@ export default function Home() {
     localStorage.removeItem(CACHE_KEY)
     setCachedAt(null)
     setPublishedPlatforms(new Set())
-    setSteps({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', publish: 'idle' })
+    setSteps({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle' })
     setLogs([])
     setRhyme(null); setRhymeScore(null); setStoryboard(null)
-    setVideoScore(null); setCaptions(null); setVideoMeta(null); setVideoData(null)
+    setVideoScore(null); setCaptions(null); setVideoMeta(null); setJob(null)
     setComplete(false); setShowPublish(false)
   }, [])
+
+  // Generates one Veo clip via the API, retrying (resuming the same operation)
+  // until it's done or errors out. Returns the updated job.
+  const renderClip = useCallback(async (jobId: string, clipIndex: number, signal: AbortSignal): Promise<VideoJob> => {
+    const MAX_ATTEMPTS = 12 // ~12 * up to 270s = generous ceiling per clip
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const res = await fetch('/api/pipeline/clip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId, clipIndex }),
+        signal,
+      })
+      if (!res.ok) throw new Error(`Clip API error: ${res.status}`)
+      const data = await res.json() as { job: VideoJob; clip: { status: string; error?: string } }
+      setJob(data.job)
+      if (data.clip.status === 'done' || data.clip.status === 'error') return data.job
+      addLog(`Clip ${clipIndex + 1}/${data.job.clips.length} still rendering — resuming... (attempt ${attempt})`, 'agent')
+    }
+    throw new Error(`Clip ${clipIndex + 1} did not finish after ${MAX_ATTEMPTS} attempts`)
+  }, [addLog])
+
+  // Walks every clip to completion, then stitches the final video.
+  const renderVideo = useCallback(async (initialJob: VideoJob, signal: AbortSignal) => {
+    setStep('render', 'active')
+    addLog(`Rendering ${initialJob.clips.length} video clips (~${initialJob.targetDurationSec}s total)...`, 'agent')
+
+    let currentJob = initialJob
+    for (let i = 0; i < currentJob.clips.length; i++) {
+      if (currentJob.clips[i].status === 'done') continue
+      addLog(`Generating clip ${i + 1}/${currentJob.clips.length}...`, 'agent')
+      currentJob = await renderClip(currentJob.id, i, signal)
+      if (currentJob.clips[i].status === 'error') {
+        addLog(`Clip ${i + 1} failed: ${currentJob.clips[i].error}`, 'error')
+        setStep('render', 'failed')
+        return
+      }
+      addLog(`Clip ${i + 1}/${currentJob.clips.length} ready ✓`, 'success')
+    }
+
+    addLog('Stitching clips into the final video...', 'agent')
+    let data: { job?: VideoJob; error?: string } = {}
+    let res: Response | undefined
+    for (let attempt = 0; attempt < 5; attempt++) {
+      res = await fetch('/api/pipeline/stitch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJob.id }),
+        signal,
+      })
+      data = await res.json() as { job?: VideoJob; error?: string }
+      if (res.status !== 409) break
+      await new Promise(r => setTimeout(r, 2000))
+    }
+    if (!res || !res.ok || !data.job) {
+      addLog(`Stitching failed: ${data.error ?? res?.status}`, 'error')
+      setStep('render', 'failed')
+      return
+    }
+    setJob(data.job)
+    setStep('render', 'done')
+    addLog('Final video ready ✓', 'success')
+  }, [renderClip, addLog, setStep])
 
   const startPipeline = useCallback(async () => {
     if (running) return
@@ -276,8 +339,9 @@ export default function Home() {
     setRunning(true)
 
     abortRef.current = new AbortController()
+    let createdJob: VideoJob | null = null
     try {
-      const res = await fetch('/api/pipeline', { signal: abortRef.current.signal })
+      const res = await fetch('/api/pipeline/start', { signal: abortRef.current.signal })
       if (!res.ok) throw new Error(`API error: ${res.status}`)
       if (!res.body) throw new Error('No response body')
 
@@ -313,13 +377,14 @@ export default function Home() {
                 setStoryboard(chunk.payload as Storyboard)
                 break
               case 'video_meta':
-                setVideoMeta(chunk.payload as { videoPrompt: string; audioScript: string })
-                break
-              case 'video_data':
-                setVideoData(chunk.payload as VideoData)
+                setVideoMeta(chunk.payload as VideoMeta)
                 break
               case 'video_score':
                 setVideoScore(chunk.payload as VideoScore)
+                break
+              case 'job':
+                createdJob = chunk.payload as VideoJob
+                setJob(createdJob)
                 break
               case 'captions':
                 setCaptions(chunk.payload as SocialCaptions)
@@ -334,6 +399,10 @@ export default function Home() {
           } catch { /* skip malformed */ }
         }
       }
+
+      if (createdJob) {
+        await renderVideo(createdJob, abortRef.current.signal)
+      }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         addLog(`Connection error: ${(err as Error).message}`, 'error')
@@ -342,7 +411,7 @@ export default function Home() {
     } finally {
       setRunning(false)
     }
-  }, [running, reset, setStep, addLog])
+  }, [running, reset, setStep, addLog, renderVideo])
 
   // Keep publishedPlatforms in sync with cache without overwriting other fields
   useEffect(() => {
@@ -364,10 +433,10 @@ export default function Home() {
     localStorage.removeItem(CACHE_KEY)
     setCachedAt(null)
     setPublishedPlatforms(new Set())
-    setSteps({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', publish: 'idle' })
+    setSteps({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle' })
     setLogs([{ time: new Date().toLocaleTimeString('en-US', { hour12: false }), msg: 'Published content cleared. Ready for new video.', type: 'success' }])
     setRhyme(null); setRhymeScore(null); setStoryboard(null)
-    setVideoScore(null); setCaptions(null); setVideoMeta(null); setVideoData(null)
+    setVideoScore(null); setCaptions(null); setVideoMeta(null); setJob(null)
     setComplete(false); setShowPublish(false)
   }, [])
 
@@ -425,7 +494,7 @@ export default function Home() {
             {/* Pipeline Steps */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Agent Pipeline</div>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-7 gap-2">
                 {STEPS.map(s => {
                   const st = steps[s.id]
                   return (
@@ -604,7 +673,7 @@ export default function Home() {
                     {isReady ? 'Final Video Ready — Ready to Post!' : 'Final Video Ready'}
                   </div>
                   <div className="text-sm text-slate-400 mt-1">
-                    Video: {finalScore.toFixed(1)}/10 · All 6 agents complete ·{' '}
+                    Video: {finalScore.toFixed(1)}/10 · All 7 agents complete ·{' '}
                     {isReady ? 'Copy captions + upload your video to go live' : 'Copy captions to publish'}
                   </div>
                 </div>
@@ -675,8 +744,33 @@ export default function Home() {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Video Package</div>
               <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-                {videoData ? (
-                  <VideoPlayer videoData={videoData} videoScore={videoScore} />
+                {job?.finalVideoUrl ? (
+                  <VideoPlayer videoUrl={job.finalVideoUrl} videoScore={videoScore} />
+                ) : job ? (
+                  <div className="relative" style={{ aspectRatio: '9/16' }}>
+                    {storyboard && rhyme && (
+                      <VideoPreview storyboard={storyboard} rhyme={rhyme} videoScore={videoScore} />
+                    )}
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 px-4 text-center">
+                      <div className="w-6 h-6 border-2 border-slate-700 border-t-violet-400 rounded-full animate-spin" />
+                      {(() => {
+                        const done = job.clips.filter(c => c.status === 'done').length
+                        const total = job.clips.length
+                        const label = job.status === 'stitching'
+                          ? 'Stitching final video...'
+                          : `Rendering clip ${Math.min(done + 1, total)} / ${total}`
+                        return (
+                          <>
+                            <span className="text-[12px] font-bold text-white">{label}</span>
+                            <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                              <div className="h-full bg-violet-500 transition-all duration-500" style={{ width: `${(done / total) * 100}%` }} />
+                            </div>
+                            <span className="text-[10px] text-slate-400">~{job.targetDurationSec}s final video · {job.clipDurationSec}s per clip</span>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
                 ) : storyboard && rhyme ? (
                   <VideoPreview storyboard={storyboard} rhyme={rhyme} videoScore={videoScore} />
                 ) : (
