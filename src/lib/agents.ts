@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai'
+import { jsonrepair } from 'jsonrepair'
 import type { RhymeData, RhymeScore, Storyboard, StoryboardShot, VideoScore, SocialCaptions, ContentType, CreativeBrief } from '@/types'
 
 const genai = new GoogleGenAI({ apiKey: (process.env.GOOGLE_API_KEY ?? '').replace(/\u{FEFF}/u, '') })
@@ -13,7 +14,14 @@ function safeJSON<T>(text: string): T {
     else if (clean[i] === '}') { depth--; if (depth === 0) { end = i; break } }
   }
   if (end === -1) throw new Error('No JSON found in response')
-  return JSON.parse(clean.slice(start, end + 1)) as T
+  const candidate = clean.slice(start, end + 1)
+  try {
+    return JSON.parse(candidate) as T
+  } catch {
+    // Gemini sometimes returns unescaped quotes in strings or trailing commas.
+    // jsonrepair handles these cases without losing data.
+    return JSON.parse(jsonrepair(candidate)) as T
+  }
 }
 
 async function callGemini(system: string, user: string, maxOutputTokens = 4096): Promise<string> {
