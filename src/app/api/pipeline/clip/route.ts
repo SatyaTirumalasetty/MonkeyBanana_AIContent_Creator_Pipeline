@@ -28,6 +28,16 @@ const KLING_STYLE: Record<ContentType, string> = {
   custom:        'professional, cinematic, high quality, visually compelling',
 }
 
+const FLUX_STYLE: Record<ContentType, string> = {
+  kids_rhyme:    'vibrant colors, cute cartoon illustration, bright cheerful colors, toddler friendly',
+  poem:          'cinematic fine art photography, soft atmospheric lighting, artistic composition',
+  short_film:    'cinematic drama, realistic movie still, professional lighting, film photography',
+  advertisement: 'commercial photography, clean modern aesthetic, high production value, lifestyle',
+  educational:   'clean infographic illustration, bright and clear, educational graphic design',
+  music_video:   'dynamic editorial photography, energetic, stylized vibrant lighting',
+  custom:        'professional photography, high quality, visually compelling, detailed',
+}
+
 function buildKlingPrompt(shot: StoryboardShot, storyboard: Storyboard, contentType?: ContentType): string {
   const mood = storyboard.mood || 'cinematic'
   const bgStyle = storyboard.backgroundStyle || 'colorful'
@@ -124,8 +134,27 @@ export async function POST(req: NextRequest) {
       } catch (falErr) {
         const msg = falErr instanceof Error ? falErr.message : String(falErr)
         if (/forbidden|403/i.test(msg)) {
-          // FAL account lacks Kling credits — fall through to canvas slideshow
-          console.warn(`[clip/${clipIndex}] Kling AI 403 Forbidden (no credits/access) — falling back to canvas`)
+          // Kling needs credits — try Flux Schnell image tier (~$0.003/image)
+          console.warn(`[clip/${clipIndex}] Kling AI 403 Forbidden — trying Flux Schnell image tier`)
+          try {
+            const fluxPrompt = `${shot.description}, ${shot.camera}. ${FLUX_STYLE[job.contentType ?? 'custom']}`
+            const fluxResult = await fal.run('fal-ai/flux/schnell', {
+              input: { prompt: fluxPrompt, image_size: 'portrait_9_16', num_images: 1 },
+            }) as unknown as { images: Array<{ url: string }> }
+            const imgRes = await fetch(fluxResult.images[0].url)
+            if (!imgRes.ok) throw new Error(`Flux download failed: ${imgRes.status}`)
+            const imgBuf = Buffer.from(await imgRes.arrayBuffer())
+            const [{ renderFluxFrame, captionForShot }, { renderSlideClip }] = await Promise.all([
+              import('@/lib/renderShot'),
+              import('@/lib/renderClip'),
+            ])
+            const caption = captionForShot(shot, job.videoMeta)
+            const frameBuffer = await renderFluxFrame(imgBuf, caption)
+            videoBuffer = await renderSlideClip(frameBuffer, clip.durationSec, clipIndex % 2 === 0)
+          } catch (fluxErr) {
+            console.warn(`[clip/${clipIndex}] Flux Schnell failed — falling back to canvas`, fluxErr)
+            // videoBuffer stays undefined → canvas fallback below
+          }
         } else {
           throw falErr
         }
@@ -133,7 +162,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!videoBuffer) {
-      // ── Canvas slideshow fallback (no FAL_KEY, or Kling returned Forbidden) ─
+      // ── Canvas slideshow fallback (no FAL_KEY, or all AI tiers failed) ──────
       // Draws a styled still frame with @napi-rs/canvas and animates it with
       // a Ken Burns zoom using ffmpeg — fully self-contained, no external APIs.
       const [{ renderShotFrame, captionForShot }, { renderSlideClip }] = await Promise.all([

@@ -1,4 +1,4 @@
-import { createCanvas, GlobalFonts, type SKRSContext2D } from '@napi-rs/canvas'
+import { createCanvas, GlobalFonts, loadImage, type SKRSContext2D } from '@napi-rs/canvas'
 import path from 'path'
 import type { StoryboardShot, VideoMeta } from '@/types'
 
@@ -74,6 +74,42 @@ function mulberry32(seed: number) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+// Composites a caption bar over a Flux-generated image for the image-animated tier.
+// The image is cover-filled to 1080×1920; the same rounded-rect caption box
+// is drawn at the bottom so subtitle text stays readable over any image.
+export async function renderFluxFrame(imageBuffer: Buffer, caption: string): Promise<Buffer> {
+  ensureFont()
+  const canvas = createCanvas(WIDTH, HEIGHT)
+  const ctx = canvas.getContext('2d')
+
+  const img = await loadImage(imageBuffer)
+  const scale = Math.max(WIDTH / img.width, HEIGHT / img.height)
+  const sw = img.width * scale
+  const sh = img.height * scale
+  ctx.drawImage(img, (WIDTH - sw) / 2, (HEIGHT - sh) / 2, sw, sh)
+
+  if (caption) {
+    ctx.font = `64px ${FONT_FAMILY}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const lines = wrapText(ctx, caption, WIDTH - 140)
+    const lineHeight = 84
+    const boxHeight = lines.length * lineHeight + 60
+    const boxY = HEIGHT - boxHeight - 140
+
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    roundRect(ctx, 50, boxY, WIDTH - 100, boxHeight, 28)
+    ctx.fill()
+
+    ctx.fillStyle = '#ffffff'
+    lines.forEach((line, i) => {
+      ctx.fillText(line, WIDTH / 2, boxY + 30 + lineHeight * i + lineHeight / 2)
+    })
+  }
+
+  return canvas.toBuffer('image/png')
 }
 
 // Renders a single 9:16 still frame for a storyboard shot: gradient
