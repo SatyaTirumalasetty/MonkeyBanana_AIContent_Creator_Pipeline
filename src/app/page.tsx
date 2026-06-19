@@ -133,7 +133,7 @@ function AgentCard({ stepId, status, message }: {
         style={{ color: isActive ? `${a.color}cc` : '#334155' }}
       >
         {isActive && message
-          ? message.replace(/Error:\s*\{.*\}/s, 'API busy — retrying…').replace(/^(Pipeline error|Error):\s*/i, '⚠ ')
+          ? message.replace(/Error:\s*\{[^}]*\}/, 'API busy — retrying…').replace(/^(Pipeline error|Error):\s*/i, '⚠ ')
           : a.tagline}
       </div>
     </div>
