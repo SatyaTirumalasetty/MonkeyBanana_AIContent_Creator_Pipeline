@@ -79,49 +79,61 @@ export async function POST(req: NextRequest) {
 
   try {
     const shot = job.storyboard.shots[clipIndex]
-    let videoBuffer: Buffer
+    let videoBuffer: Buffer | undefined
 
     if (process.env.FAL_KEY) {
       // ── Kling AI path ──────────────────────────────────────────────────────
-      fal.config({ credentials: process.env.FAL_KEY })
-      const prompt = buildKlingPrompt(shot, job.storyboard, job.contentType)
+      try {
+        fal.config({ credentials: process.env.FAL_KEY })
+        const prompt = buildKlingPrompt(shot, job.storyboard, job.contentType)
 
-      if (clipIndex === 0 || !job.referenceImageUrl) {
-        // Scene 0: text-to-video establishes the visual style and characters
-        const result = await fal.run('fal-ai/kling-video/v1.6/standard/text-to-video', {
-          input: {
-            prompt,
-            negative_prompt: NEGATIVE_PROMPT,
-            duration: CLIP_DURATION,
-            aspect_ratio: ASPECT_RATIO,
-          },
-        }) as unknown as { video: { url: string } }
+        if (clipIndex === 0 || !job.referenceImageUrl) {
+          // Scene 0: text-to-video establishes the visual style and characters
+          const result = await fal.run('fal-ai/kling-video/v1.6/standard/text-to-video', {
+            input: {
+              prompt,
+              negative_prompt: NEGATIVE_PROMPT,
+              duration: CLIP_DURATION,
+              aspect_ratio: ASPECT_RATIO,
+            },
+          }) as unknown as { video: { url: string } }
 
-        const res = await fetch(result.video.url)
-        if (!res.ok) throw new Error(`Failed to download Kling clip 0: ${res.status}`)
-        videoBuffer = Buffer.from(await res.arrayBuffer())
+          const res = await fetch(result.video.url)
+          if (!res.ok) throw new Error(`Failed to download Kling clip 0: ${res.status}`)
+          videoBuffer = Buffer.from(await res.arrayBuffer())
 
-        // Extract last frame and save as reference for all subsequent scenes
-        const frameBuffer = await extractLastFrame(videoBuffer)
-        job.referenceImageUrl = await saveReferenceImage(job.id, frameBuffer)
-      } else {
-        // Scenes 1+: image-to-video locks character appearance via reference frame
-        const result = await fal.run('fal-ai/kling-video/v1.6/pro/image-to-video', {
-          input: {
-            prompt,
-            image_url: job.referenceImageUrl,
-            negative_prompt: NEGATIVE_PROMPT,
-            duration: CLIP_DURATION,
-            aspect_ratio: ASPECT_RATIO,
-          },
-        }) as unknown as { video: { url: string } }
+          // Extract last frame and save as reference for all subsequent scenes
+          const frameBuffer = await extractLastFrame(videoBuffer)
+          job.referenceImageUrl = await saveReferenceImage(job.id, frameBuffer)
+        } else {
+          // Scenes 1+: image-to-video locks character appearance via reference frame
+          const result = await fal.run('fal-ai/kling-video/v1.6/pro/image-to-video', {
+            input: {
+              prompt,
+              image_url: job.referenceImageUrl,
+              negative_prompt: NEGATIVE_PROMPT,
+              duration: CLIP_DURATION,
+              aspect_ratio: ASPECT_RATIO,
+            },
+          }) as unknown as { video: { url: string } }
 
-        const res = await fetch(result.video.url)
-        if (!res.ok) throw new Error(`Failed to download Kling clip ${clipIndex}: ${res.status}`)
-        videoBuffer = Buffer.from(await res.arrayBuffer())
+          const res = await fetch(result.video.url)
+          if (!res.ok) throw new Error(`Failed to download Kling clip ${clipIndex}: ${res.status}`)
+          videoBuffer = Buffer.from(await res.arrayBuffer())
+        }
+      } catch (falErr) {
+        const msg = falErr instanceof Error ? falErr.message : String(falErr)
+        if (/forbidden|403/i.test(msg)) {
+          // FAL account lacks Kling credits — fall through to canvas slideshow
+          console.warn(`[clip/${clipIndex}] Kling AI 403 Forbidden (no credits/access) — falling back to canvas`)
+        } else {
+          throw falErr
+        }
       }
-    } else {
-      // ── Canvas slideshow fallback (no FAL_KEY needed) ──────────────────────
+    }
+
+    if (!videoBuffer) {
+      // ── Canvas slideshow fallback (no FAL_KEY, or Kling returned Forbidden) ─
       // Draws a styled still frame with @napi-rs/canvas and animates it with
       // a Ken Burns zoom using ffmpeg — fully self-contained, no external APIs.
       const [{ renderShotFrame, captionForShot }, { renderSlideClip }] = await Promise.all([
