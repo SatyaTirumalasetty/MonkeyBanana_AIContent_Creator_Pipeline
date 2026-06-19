@@ -1,19 +1,22 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, Fragment } from 'react'
-import type { LogEntry, RhymeData, RhymeScore, Storyboard, VideoScore, SocialCaptions, VideoMeta, VideoJob, Platform } from '@/types'
+import type {
+  LogEntry, RhymeData, RhymeScore, Storyboard, VideoScore,
+  SocialCaptions, VideoMeta, VideoJob, Platform, ContentType,
+} from '@/types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type StepStatus = 'idle' | 'active' | 'done' | 'failed'
 type StepId = 'rhyme' | 'review' | 'storyboard' | 'video' | 'vreview' | 'render' | 'publish'
 
-const STEPS: { id: StepId; icon: string; name: string; sub: string }[] = [
-  { id: 'rhyme',      icon: '✍️', name: 'Rhyme Generator',    sub: 'Generating rhyme' },
-  { id: 'review',     icon: '🔍', name: 'Rhyme Reviewer',     sub: 'Scoring quality' },
-  { id: 'storyboard', icon: '🎨', name: 'Storyboard Planner', sub: 'Planning scenes' },
-  { id: 'video',      icon: '🎬', name: 'Video Generator',    sub: 'Building package' },
-  { id: 'vreview',    icon: '⭐', name: 'Video Reviewer',     sub: 'Quality check' },
-  { id: 'render',     icon: '🎥', name: 'Video Renderer',     sub: 'Rendering clips' },
-  { id: 'publish',    icon: '🚀', name: 'Social Publisher',   sub: 'Preparing assets' },
+const STEPS: { id: StepId; name: string }[] = [
+  { id: 'rhyme',      name: 'Content Creator' },
+  { id: 'review',     name: 'Content Reviewer' },
+  { id: 'storyboard', name: 'Scene Director' },
+  { id: 'video',      name: 'Video Producer' },
+  { id: 'vreview',    name: 'Quality Director' },
+  { id: 'render',     name: 'Video Renderer' },
+  { id: 'publish',    name: 'Social Publisher' },
 ]
 
 const PLATFORM_META = {
@@ -23,15 +26,36 @@ const PLATFORM_META = {
   tiktok:    { name: 'TikTok',          icon: '🎵', url: 'https://www.tiktok.com/upload',         color: '#000000', desc: 'TikTok → + → Upload' },
 }
 
-// ── Agent characters ──────────────────────────────────────────────────────────
-const AGENT_CHARS: Record<StepId, { char: string; name: string; role: string; color: string; tagline: string }> = {
-  rhyme:      { char: '🐝', name: 'Lyra',   role: 'Poet Bee',         color: '#c77dff', tagline: 'Crafts magical rhymes for little ones' },
-  review:     { char: '🦉', name: 'Rex',    role: 'Scholar Owl',      color: '#4cc9f0', tagline: 'Checks every word for quality' },
-  storyboard: { char: '🦊', name: 'Stormy', role: 'Artist Fox',       color: '#ff9f43', tagline: 'Paints vivid scenes for the story' },
-  video:      { char: '🐱', name: 'Vince',  role: 'Director Cat',     color: '#ff6b9d', tagline: 'Builds the full production package' },
-  vreview:    { char: '🐰', name: 'Stella', role: 'Critic Rabbit',    color: '#5bea8b', tagline: 'Scores the video before it ships' },
-  render:     { char: '🤖', name: 'Robo',   role: 'Engineer Bot',     color: '#f8c537', tagline: 'Renders and stitches every clip' },
-  publish:    { char: '🦋', name: 'Pixel',  role: 'Social Butterfly', color: '#56cfb2', tagline: 'Prepares assets for every platform' },
+// ── Agent characters — each with unique action-reflecting animation ────────────
+const AGENT_CHARS: Record<StepId, {
+  char: string; name: string; role: string; color: string; tagline: string; action: string; animation: string
+}> = {
+  rhyme:      { char: '🐝', name: 'Lyra',   role: 'Content Creator',  color: '#c77dff', tagline: 'Crafts compelling scripts & content', action: '✏️', animation: 'agent-write 0.8s ease-in-out infinite' },
+  review:     { char: '🦉', name: 'Rex',    role: 'Scholar Owl',      color: '#4cc9f0', tagline: 'Scores quality across 6 dimensions', action: '🔍', animation: 'agent-scan 1s ease-in-out infinite' },
+  storyboard: { char: '🦊', name: 'Stormy', role: 'Artist Fox',       color: '#ff9f43', tagline: 'Paints each visual scene into life', action: '🎨', animation: 'agent-paint 1.2s ease-in-out infinite alternate' },
+  video:      { char: '🐱', name: 'Vince',  role: 'Director Cat',     color: '#ff6b9d', tagline: 'Builds the full production package', action: '🎬', animation: 'agent-zoom 1s ease-in-out infinite alternate' },
+  vreview:    { char: '🐰', name: 'Stella', role: 'Critic Rabbit',    color: '#5bea8b', tagline: 'Scores the video before it ships', action: '⭐', animation: 'agent-nod 0.6s ease-in-out infinite alternate' },
+  render:     { char: '🤖', name: 'Robo',   role: 'Engineer Bot',     color: '#f8c537', tagline: 'Renders and stitches every clip', action: '⚙️', animation: 'agent-spin 2s linear infinite' },
+  publish:    { char: '🦋', name: 'Pixel',  role: 'Social Butterfly', color: '#56cfb2', tagline: 'Prepares assets for every platform', action: '📤', animation: 'agent-flutter 0.9s ease-in-out infinite' },
+}
+
+// ── Content type definitions ───────────────────────────────────────────────────
+const CONTENT_TYPES: {
+  id: ContentType; label: string; icon: string; color: string
+  gradient: string; placeholder: string; desc: string
+}[] = [
+  { id: 'kids_rhyme',    label: 'Kids Rhyme',    icon: '🎠', color: '#c77dff', gradient: 'linear-gradient(135deg,#3b0764,#581c87)', placeholder: 'e.g. "counting animals at a farm"',              desc: 'Educational rhymes for toddlers 2–5' },
+  { id: 'poem',          label: 'Poem',           icon: '📜', color: '#60a5fa', gradient: 'linear-gradient(135deg,#1e3a5f,#1e40af)', placeholder: 'e.g. "a poem about rain and renewal"',            desc: 'Evocative poetry with rich imagery' },
+  { id: 'short_film',   label: 'Short Film',     icon: '🎬', color: '#f87171', gradient: 'linear-gradient(135deg,#450a0a,#7f1d1d)', placeholder: 'e.g. "a stranger finds a mysterious letter"',    desc: 'Cinematic micro-narrative, 60s format' },
+  { id: 'advertisement',label: 'Advertisement',  icon: '📣', color: '#fb923c', gradient: 'linear-gradient(135deg,#431407,#7c2d12)', placeholder: 'e.g. "eco-friendly water bottle launch"',         desc: 'Hook → Solution → CTA video ad' },
+  { id: 'educational',  label: 'Educational',    icon: '🧠', color: '#34d399', gradient: 'linear-gradient(135deg,#022c22,#064e3b)', placeholder: 'e.g. "how photosynthesis works"',                desc: 'Feynman-style explainer video' },
+  { id: 'music_video',  label: 'Music Video',    icon: '🎵', color: '#f472b6', gradient: 'linear-gradient(135deg,#500724,#831843)', placeholder: 'e.g. "upbeat pop song about friendship"',        desc: 'Lyrics + cinematic visual treatment' },
+  { id: 'custom',       label: 'Custom',         icon: '✨', color: '#a78bfa', gradient: 'linear-gradient(135deg,#1e1b4b,#312e81)', placeholder: 'Describe exactly what you want to create...',    desc: 'Your creative brief, any format' },
+]
+
+const CONTENT_LABEL: Record<ContentType, string> = {
+  kids_rhyme: 'Generated Rhyme', poem: 'Generated Poem', short_film: 'Generated Script',
+  advertisement: 'Ad Script', educational: 'Explainer Script', music_video: 'Song Lyrics', custom: 'Generated Content',
 }
 
 // ── Score Bar ─────────────────────────────────────────────────────────────────
@@ -62,6 +86,70 @@ function CopyButton({ text, label = 'Copy caption' }: { text: string; label?: st
   )
 }
 
+// ── Content Type Card ─────────────────────────────────────────────────────────
+function TypeCard({ ct, selected, onSelect, disabled }: {
+  ct: typeof CONTENT_TYPES[0]; selected: ContentType; onSelect: (t: ContentType) => void; disabled?: boolean
+}) {
+  const isSelected = selected === ct.id
+  return (
+    <button
+      onClick={() => !disabled && onSelect(ct.id)}
+      disabled={disabled}
+      className="relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center disabled:pointer-events-none"
+      style={{
+        background: isSelected ? ct.gradient : 'transparent',
+        borderColor: isSelected ? ct.color : '#1e293b',
+        boxShadow: isSelected ? `0 0 20px ${ct.color}30` : 'none',
+      }}
+    >
+      <span className="text-2xl">{ct.icon}</span>
+      <span className="text-[10px] font-bold text-white leading-tight">{ct.label}</span>
+      {isSelected && (
+        <div
+          className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold"
+          style={{ background: ct.color, color: '#fff' }}
+        >✓</div>
+      )}
+    </button>
+  )
+}
+
+// ── Content Type Selector ─────────────────────────────────────────────────────
+function ContentTypeSelector({
+  selected, onSelect, brief, onBriefChange, disabled,
+}: {
+  selected: ContentType; onSelect: (t: ContentType) => void
+  brief: string; onBriefChange: (v: string) => void; disabled?: boolean
+}) {
+  const meta = CONTENT_TYPES.find(t => t.id === selected)!
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">What do you want to create?</div>
+      <div className="grid grid-cols-4 gap-2 mb-2">
+        {CONTENT_TYPES.slice(0, 4).map(ct => (
+          <TypeCard key={ct.id} ct={ct} selected={selected} onSelect={onSelect} disabled={disabled} />
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {CONTENT_TYPES.slice(4).map(ct => (
+          <TypeCard key={ct.id} ct={ct} selected={selected} onSelect={onSelect} disabled={disabled} />
+        ))}
+      </div>
+      <div className="text-[11px] text-slate-400 mb-2">{meta.desc}</div>
+      <textarea
+        value={brief}
+        onChange={e => onBriefChange(e.target.value)}
+        placeholder={meta.placeholder}
+        maxLength={500}
+        rows={2}
+        disabled={disabled}
+        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-[12px] text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-violet-500 transition-colors disabled:opacity-40"
+      />
+      <div className="text-[9px] text-slate-600 mt-1">Optional — leave blank for AI to decide · {brief.length}/500</div>
+    </div>
+  )
+}
+
 // ── Agent Card ────────────────────────────────────────────────────────────────
 function AgentCard({ stepId, status, message }: {
   stepId: StepId; status: StepStatus; message: string
@@ -73,51 +161,65 @@ function AgentCard({ stepId, status, message }: {
 
   return (
     <div
-      className={`relative flex flex-col items-center px-2 pt-4 pb-3 rounded-2xl border-2 transition-all duration-500 overflow-hidden ${status === 'idle' ? 'opacity-30' : ''}`}
+      className={`relative flex flex-col items-center px-2 pt-5 pb-3 rounded-2xl border-2 transition-all duration-500 overflow-hidden ${status === 'idle' ? 'opacity-30' : ''}`}
       style={{
-        minHeight: 210,
+        minHeight: 280,
         borderColor: isActive ? a.color : isDone ? '#10b981' : isFailed ? '#f59e0b' : '#1e293b',
         background: isActive ? `${a.color}0a` : 'transparent',
-        boxShadow: isActive ? `0 0 28px ${a.color}45` : 'none',
+        boxShadow: isActive ? `0 0 32px ${a.color}40` : 'none',
       }}
     >
-      {/* Radial glow pulse */}
+      {/* Radial glow when active */}
       {isActive && (
         <div
           className="absolute inset-0 pointer-events-none animate-pulse"
-          style={{ background: `radial-gradient(ellipse at 50% 25%, ${a.color}22 0%, transparent 70%)` }}
+          style={{ background: `radial-gradient(ellipse at 50% 20%, ${a.color}22 0%, transparent 65%)` }}
         />
       )}
 
       {/* Avatar */}
-      <div className="relative mb-2">
+      <div className="relative mb-2.5">
         <div
-          className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl transition-all duration-300 ${isActive ? 'animate-bounce' : ''}`}
+          className="w-24 h-24 rounded-full flex items-center justify-center text-5xl transition-all duration-300"
           style={{
             background: status === 'idle' ? '#0f172a' : `${a.color}18`,
             border: `2px solid ${status === 'idle' ? '#1e293b' : a.color}55`,
+            animation: isActive ? a.animation : 'none',
           }}
         >
           {isDone ? '🥳' : isFailed ? '😰' : a.char}
         </div>
+
+        {/* Action badge — shows what the agent is doing */}
         {isActive && (
           <div
-            className="absolute -inset-1.5 rounded-full animate-ping opacity-20 pointer-events-none"
+            className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center text-base shadow-lg"
+            style={{ background: `${a.color}22`, border: `1.5px solid ${a.color}88` }}
+          >
+            {a.action}
+          </div>
+        )}
+
+        {/* Ping ring when active */}
+        {isActive && (
+          <div
+            className="absolute -inset-2 rounded-full animate-ping opacity-15 pointer-events-none"
             style={{ border: `2px solid ${a.color}` }}
           />
         )}
+
         {isDone && (
           <div className="absolute -top-1 -right-1 text-sm leading-none">✅</div>
         )}
       </div>
 
       {/* Name + role */}
-      <div className="text-[11px] font-extrabold text-white text-center leading-tight">{a.name}</div>
+      <div className="text-[12px] font-extrabold text-white text-center leading-tight">{a.name}</div>
       <div className="text-[9px] text-slate-400 text-center mb-2">{a.role}</div>
 
       {/* Status badge */}
       <div
-        className="text-[8px] font-bold px-2 py-0.5 rounded-full mb-2 shrink-0"
+        className="text-[9px] font-bold px-2.5 py-0.5 rounded-full mb-2 shrink-0"
         style={{
           background: `${isActive ? a.color : isDone ? '#10b981' : isFailed ? '#f59e0b' : '#334155'}22`,
           color: isActive ? a.color : isDone ? '#34d399' : isFailed ? '#fbbf24' : '#475569',
@@ -127,10 +229,16 @@ function AgentCard({ stepId, status, message }: {
         {isActive ? '⚡ Working' : isDone ? '✓ Done' : isFailed ? '⚠ Retry' : '○ Idle'}
       </div>
 
-      {/* Activity message or tagline */}
+      {/* Live message or tagline */}
       <div
-        className="text-[8px] text-center leading-tight px-0.5 line-clamp-3"
-        style={{ color: isActive ? `${a.color}cc` : '#334155' }}
+        className="text-[10px] text-center leading-tight px-1"
+        style={{
+          color: isActive ? `${a.color}cc` : '#334155',
+          overflow: 'hidden',
+          display: '-webkit-box',
+          WebkitLineClamp: 4,
+          WebkitBoxOrient: 'vertical',
+        } as React.CSSProperties}
       >
         {isActive && message
           ? message.replace(/Error:\s*\{[^}]*\}/, 'API busy — retrying…').replace(/^(Pipeline error|Error):\s*/i, '⚠ ')
@@ -181,14 +289,10 @@ function VideoPreview({ storyboard, rhyme, videoScore }: {
   return (
     <div ref={containerRef} className="relative overflow-hidden rounded-xl select-none"
       style={{ aspectRatio: '9/16', background: shot.bg || 'linear-gradient(135deg,#1a0a2e,#2d1b4e)' }}>
-
-      {/* Shot content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
         <div className="text-6xl mb-3" style={{ animation: 'bounce 1s infinite' }}>{shot.emoji}</div>
         <div className="text-[10px] font-semibold text-white/60 leading-relaxed line-clamp-3">{shot.description}</div>
       </div>
-
-      {/* Camera label */}
       <div className="absolute top-2 left-2 right-2 flex justify-between items-center">
         <div className="bg-black/50 backdrop-blur-sm rounded-lg px-2 py-0.5 text-[9px] font-bold text-white/80">
           SHOT {shotIdx + 1} / {storyboard.shots.length} · {shot.timestamp}
@@ -197,20 +301,16 @@ function VideoPreview({ storyboard, rhyme, videoScore }: {
           📷 {shot.camera?.split(',')[0]}
         </div>
       </div>
-
-      {/* Subtitle */}
       <div className="absolute bottom-14 left-2 right-2">
         <div className="bg-black/70 backdrop-blur-sm rounded-lg px-3 py-1.5 text-center text-[11px] font-bold text-white leading-snug">
           {lines[lineIdx]}
         </div>
       </div>
-
-      {/* Controls bar */}
       <div className="absolute bottom-0 left-0 right-0 px-3 py-2 flex items-center justify-between bg-black/50 backdrop-blur-sm">
         <div className="flex gap-1">
           {storyboard.shots.map((_, i) => (
             <button key={i} onClick={() => { setShotIdx(i); setPlaying(false) }}
-              className="transition-all rounded-full bg-white/40 hover:bg-white/70"
+              className="transition-all rounded-full"
               style={{ width: i === shotIdx ? 14 : 6, height: 6, background: i === shotIdx ? 'white' : 'rgba(255,255,255,0.4)' }} />
           ))}
         </div>
@@ -234,7 +334,7 @@ function VideoPreview({ storyboard, rhyme, videoScore }: {
   )
 }
 
-// ── Real Video Player with fullscreen ─────────────────────────────────────────
+// ── Real Video Player ─────────────────────────────────────────────────────────
 function VideoPlayer({ videoUrl, videoScore }: { videoUrl: string; videoScore: VideoScore | null }) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -277,14 +377,14 @@ function VideoPlayer({ videoUrl, videoScore }: { videoUrl: string; videoScore: V
   )
 }
 
-const CACHE_KEY = 'kids_studio_result'
+const CACHE_KEY = 'ai_studio_result_v2'
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [steps, setSteps] = useState<Record<StepId, StepStatus>>({
+  const [steps, setStepsState] = useState<Record<StepId, StepStatus>>({
     rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle'
   })
-  const [logs, setLogs] = useState<LogEntry[]>([{ time: '--:--:--', msg: 'Studio ready. Click Generate Rhyme to start.', type: '' }])
+  const [logs, setLogs] = useState<LogEntry[]>([{ time: '--:--:--', msg: 'AI Creative Studio ready. Select a content type and click Generate.', type: '' }])
   const [rhyme, setRhyme] = useState<RhymeData | null>(null)
   const [rhymeScore, setRhymeScore] = useState<RhymeScore | null>(null)
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null)
@@ -295,6 +395,8 @@ export default function Home() {
   const [running, setRunning] = useState(false)
   const [complete, setComplete] = useState(false)
   const [cachedAt, setCachedAt] = useState<string | null>(null)
+  const [contentType, setContentType] = useState<ContentType>('kids_rhyme')
+  const [userBrief, setUserBrief] = useState('')
   const [publishedPlatforms, setPublishedPlatforms] = useState<Set<Platform>>(new Set())
   const [capTab, setCapTab] = useState<Platform>('youtube')
   const [showPublish, setShowPublish] = useState(false)
@@ -318,24 +420,28 @@ export default function Home() {
       setJob(data.job ?? null)
       setCaptions(data.captions ?? null)
       setCachedAt(data.cachedAt ?? null)
+      if (data.contentType) setContentType(data.contentType)
+      if (data.userBrief) setUserBrief(data.userBrief)
       if (data.publishedPlatforms?.length) setPublishedPlatforms(new Set(data.publishedPlatforms as Platform[]))
       setComplete(true)
-      setSteps({ rhyme: 'done', review: 'done', storyboard: 'done', video: 'done', vreview: 'done', render: data.job?.finalVideoUrl ? 'done' : 'idle', publish: 'done' })
+      setStepsState({ rhyme: 'done', review: 'done', storyboard: 'done', video: 'done', vreview: 'done', render: data.job?.finalVideoUrl ? 'done' : 'idle', publish: 'done' })
       setLogs([{ time: '--:--:--', msg: `Loaded previous result from cache (${data.cachedAt ?? 'earlier'})`, type: 'info' }])
     } catch { /* corrupt cache — ignore */ }
   }, [])
 
-  // Save to cache whenever pipeline completes
+  // Save to cache when pipeline completes
   useEffect(() => {
     if (!complete || !rhyme || !storyboard) return
     try {
       const ts = new Date().toLocaleString()
       localStorage.setItem(CACHE_KEY, JSON.stringify({
         rhyme, rhymeScore, storyboard, videoMeta, videoScore, job, captions,
+        contentType, userBrief,
         publishedPlatforms: Array.from(publishedPlatforms), cachedAt: ts,
       }))
       setCachedAt(ts)
     } catch { /* storage quota exceeded */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complete])
 
   useEffect(() => {
@@ -350,7 +456,7 @@ export default function Home() {
   }, [])
 
   const setStep = useCallback((id: StepId, status: StepStatus) => {
-    setSteps(prev => ({ ...prev, [id]: status }))
+    setStepsState(prev => ({ ...prev, [id]: status }))
     if (status === 'active') {
       activeStepRef.current = id
     } else if ((status === 'done' || status === 'failed') && activeStepRef.current === id) {
@@ -362,7 +468,7 @@ export default function Home() {
     localStorage.removeItem(CACHE_KEY)
     setCachedAt(null)
     setPublishedPlatforms(new Set())
-    setSteps({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle' })
+    setStepsState({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle' })
     setLogs([])
     setRhyme(null); setRhymeScore(null); setStoryboard(null)
     setVideoScore(null); setCaptions(null); setVideoMeta(null); setJob(null)
@@ -371,10 +477,8 @@ export default function Home() {
     activeStepRef.current = null
   }, [])
 
-  // Renders one slideshow clip via the API, retrying on transient errors
-  // until it's done or fails. Returns the updated job.
   const renderClip = useCallback(async (jobId: string, clipIndex: number, signal: AbortSignal): Promise<VideoJob> => {
-    const MAX_ATTEMPTS = 12 // ~12 * up to 270s = generous ceiling per clip
+    const MAX_ATTEMPTS = 12
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const res = await fetch('/api/pipeline/clip', {
         method: 'POST',
@@ -391,7 +495,6 @@ export default function Home() {
     throw new Error(`Clip ${clipIndex + 1} did not finish after ${MAX_ATTEMPTS} attempts`)
   }, [addLog])
 
-  // Walks every clip to completion, then stitches the final video.
   const renderVideo = useCallback(async (initialJob: VideoJob, signal: AbortSignal) => {
     setStep('render', 'active')
     addLog(`Rendering ${initialJob.clips.length} video clips (~${initialJob.targetDurationSec}s total)...`, 'agent')
@@ -441,7 +544,11 @@ export default function Home() {
     abortRef.current = new AbortController()
     let createdJob: VideoJob | null = null
     try {
-      const res = await fetch('/api/pipeline/start', { signal: abortRef.current.signal })
+      const params = new URLSearchParams()
+      params.set('type', contentType)
+      if (userBrief.trim()) params.set('brief', userBrief.trim())
+
+      const res = await fetch(`/api/pipeline/start?${params}`, { signal: abortRef.current.signal })
       if (!res.ok) throw new Error(`API error: ${res.status}`)
       if (!res.body) throw new Error('No response body')
 
@@ -510,14 +617,13 @@ export default function Home() {
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         addLog(`Connection error: ${(err as Error).message}`, 'error')
-        addLog('Make sure GOOGLE_API_KEY is set in your .env file', 'warning')
+        addLog('Make sure GOOGLE_API_KEY is set in your .env.local file', 'warning')
       }
     } finally {
       setRunning(false)
     }
-  }, [running, reset, setStep, addLog, renderVideo])
+  }, [running, reset, setStep, addLog, renderVideo, contentType, userBrief])
 
-  // Keep publishedPlatforms in sync with cache without overwriting other fields
   useEffect(() => {
     if (!complete || !rhyme) return
     try {
@@ -537,7 +643,7 @@ export default function Home() {
     localStorage.removeItem(CACHE_KEY)
     setCachedAt(null)
     setPublishedPlatforms(new Set())
-    setSteps({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle' })
+    setStepsState({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle' })
     setLogs([{ time: new Date().toLocaleTimeString('en-US', { hour12: false }), msg: 'Published content cleared. Ready for new video.', type: 'success' }])
     setRhyme(null); setRhymeScore(null); setStoryboard(null)
     setVideoScore(null); setCaptions(null); setVideoMeta(null); setJob(null)
@@ -552,6 +658,8 @@ export default function Home() {
 
   const finalScore = videoScore?.total ?? 0
   const isReady = finalScore > 8
+  const selectedTypeMeta = CONTENT_TYPES.find(t => t.id === contentType)!
+  const contentLabel = CONTENT_LABEL[contentType]
 
   return (
     <div className="min-h-screen bg-[#0a0815] text-white" style={{ fontFamily: "'Nunito', sans-serif" }}>
@@ -562,9 +670,9 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold" style={{ fontFamily: "'Fredoka One', cursive", background: 'linear-gradient(135deg,#ff6b9d,#c77dff,#4cc9f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              🎬 Kids AI Video Studio
+              ✨ AI Creative Studio
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">Autonomous 6-agent pipeline · Gemini AI + Kling AI video · SSE streaming</p>
+            <p className="text-xs text-slate-500 mt-0.5">7 AI agents · Any video format · Gemini AI + Kling AI · SSE streaming</p>
           </div>
           <div className="flex items-center gap-2">
             {cachedAt && !running && (
@@ -575,7 +683,7 @@ export default function Home() {
             <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-full px-4 py-2">
               <div className={`w-2 h-2 rounded-full ${running ? 'bg-emerald-400 animate-pulse' : complete ? 'bg-violet-400' : 'bg-slate-600'}`} />
               <span className="text-xs font-bold text-slate-300">
-                {running ? 'Pipeline Running' : complete ? (isReady ? '🎉 Ready to Post' : '✅ Complete') : 'Ready'}
+                {running ? `Creating ${selectedTypeMeta.label}...` : complete ? (isReady ? '🎉 Ready to Post' : '✅ Complete') : 'Ready'}
               </span>
             </div>
           </div>
@@ -588,10 +696,22 @@ export default function Home() {
           {/* LEFT */}
           <div className="flex flex-col gap-5">
 
+            {/* Content Type Selector */}
+            <ContentTypeSelector
+              selected={contentType}
+              onSelect={setContentType}
+              brief={userBrief}
+              onBriefChange={setUserBrief}
+              disabled={running}
+            />
+
             {/* Agent Pipeline — visual character stage */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">AI Agent Crew</div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  AI Agent Crew
+                  {complete && <span className="ml-2 text-emerald-500">— {selectedTypeMeta.icon} {selectedTypeMeta.label} complete</span>}
+                </div>
                 {running && (
                   <div className="flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
@@ -620,9 +740,7 @@ export default function Home() {
                               ? `0 0 8px ${AGENT_CHARS[STEPS[i + 1].id].color}`
                               : 'none',
                           }}
-                        >
-                          →
-                        </div>
+                        >→</div>
                       </div>
                     )}
                   </Fragment>
@@ -630,13 +748,13 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Rhyme */}
+            {/* Generated Content */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Generated Rhyme</div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">{contentLabel}</div>
               {rhyme ? (
                 <>
                   <div className="text-[10px] font-bold text-violet-400 uppercase tracking-wider mb-2">
-                    Topic: {rhyme.topic} · {rhyme.learningConcept} · v{rhyme.version}
+                    {selectedTypeMeta.icon} {rhyme.topic} · {rhyme.learningConcept} · v{rhyme.version}
                   </div>
                   <div className="bg-slate-800 border border-violet-800/40 rounded-xl p-4 text-sm leading-loose whitespace-pre-wrap text-slate-100">
                     {rhyme.rhyme}
@@ -644,19 +762,19 @@ export default function Home() {
                 </>
               ) : (
                 <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm text-slate-500 italic min-h-[80px] flex items-center">
-                  Rhyme will appear here after generation...
+                  {selectedTypeMeta.icon} {contentLabel.toLowerCase()} will appear here after generation...
                 </div>
               )}
 
               {rhymeScore && (
                 <div className="mt-4">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Rhyme Quality Review</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Content Quality Review</div>
                   <ScoreBar label="Entertainment (25%)" value={rhymeScore.entertainment} color="#c77dff" />
-                  <ScoreBar label="Educational (25%)" value={rhymeScore.educational} color="#4cc9f0" />
-                  <ScoreBar label="Age Appropriate (20%)" value={rhymeScore.ageAppropriate} color="#56cfb2" />
+                  <ScoreBar label="Quality (25%)" value={rhymeScore.educational} color="#4cc9f0" />
+                  <ScoreBar label="Originality (20%)" value={rhymeScore.ageAppropriate} color="#56cfb2" />
                   <ScoreBar label="Rhythm (10%)" value={rhymeScore.rhythm} color="#ff9f43" />
-                  <ScoreBar label="Vocabulary (10%)" value={rhymeScore.simplicity} color="#ff6b9d" />
-                  <ScoreBar label="Positive Message (10%)" value={rhymeScore.positiveMessage} color="#5bea8b" />
+                  <ScoreBar label="Clarity (10%)" value={rhymeScore.simplicity} color="#ff6b9d" />
+                  <ScoreBar label="Impact (10%)" value={rhymeScore.positiveMessage} color="#5bea8b" />
                   <div className={`mt-3 p-3 rounded-xl text-sm font-bold ${rhymeScore.approved ? 'bg-emerald-950/50 border border-emerald-700 text-emerald-300' : 'bg-amber-950/50 border border-amber-700 text-amber-300'}`}>
                     Total: {rhymeScore.total.toFixed(1)}/10 — {rhymeScore.approved ? '✅ APPROVED' : '⚠️ Needs Refinement'}
                   </div>
@@ -670,9 +788,11 @@ export default function Home() {
             {/* Storyboard */}
             {storyboard && (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Storyboard — 4-Shot Plan</div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">
+                  {contentLabel} Storyboard — {storyboard.shots.length} Shots
+                </div>
                 <div className="grid grid-cols-4 gap-3">
-                  {storyboard.shots.map((shot, i) => (
+                  {storyboard.shots.slice(0, 4).map((shot, i) => (
                     <div key={i} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
                       <div className="h-20 flex items-center justify-center text-3xl" style={{ background: shot.bg || 'linear-gradient(135deg,#1a0a2e,#2d1b4e)' }}>
                         {shot.emoji}
@@ -685,6 +805,11 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+                {storyboard.shots.length > 4 && (
+                  <div className="mt-2 text-[10px] text-slate-500 text-center">
+                    +{storyboard.shots.length - 4} more shots · {storyboard.shots.length} total
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   {[
                     { l: 'Music', v: storyboard.musicStyle },
@@ -715,7 +840,7 @@ export default function Home() {
                   <CopyButton text={videoMeta.audioScript} label="Copy script" />
                 </div>
                 <div className="mt-3 p-3 bg-violet-950/40 border border-violet-800 rounded-xl text-[11px] text-violet-300">
-                  🎬 <strong>Kling AI integrated:</strong> Each scene is generated as a real AI video clip via fal.ai. Set <code className="bg-slate-800 px-1 rounded">FAL_KEY</code> in <code className="bg-slate-800 px-1 rounded">.env.local</code> to enable.
+                  🎬 <strong>Kling AI:</strong> Each scene is generated as a real AI video via fal.ai. Set <code className="bg-slate-800 px-1 rounded">FAL_KEY</code> in <code className="bg-slate-800 px-1 rounded">.env.local</code> to enable.
                 </div>
               </div>
             )}
@@ -730,7 +855,7 @@ export default function Home() {
                 <ScoreBar label="Lip Sync (15%)" value={videoScore.lipSync} color="#56cfb2" />
                 <ScoreBar label="Character Mood (15%)" value={videoScore.characterMood} color="#ff9f43" />
                 <ScoreBar label="Scene Consistency (10%)" value={videoScore.sceneConsistency} color="#5bea8b" />
-                <ScoreBar label="Kid Engagement (5%)" value={videoScore.engagement} color="#f8c537" />
+                <ScoreBar label="Engagement (5%)" value={videoScore.engagement} color="#f8c537" />
                 <div className={`mt-3 p-3 rounded-xl text-sm font-bold ${videoScore.approved ? 'bg-emerald-950/50 border border-emerald-700 text-emerald-300' : 'bg-amber-950/50 border border-amber-700 text-amber-300'}`}>
                   Video Score: {videoScore.total.toFixed(1)}/10 — {videoScore.approved ? '✅ APPROVED' : '⚠️ Re-rendering...'}
                 </div>
@@ -743,11 +868,8 @@ export default function Home() {
                 <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Platform Captions</div>
                 <div className="flex gap-2 mb-4">
                   {(['youtube', 'instagram', 'facebook', 'tiktok'] as Platform[]).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setCapTab(p)}
-                      className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${capTab === p ? 'bg-violet-900/50 border-violet-500 text-violet-300' : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}
-                    >
+                    <button key={p} onClick={() => setCapTab(p)}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${capTab === p ? 'bg-violet-900/50 border-violet-500 text-violet-300' : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}>
                       {PLATFORM_META[p].icon} {PLATFORM_META[p].name}
                     </button>
                   ))}
@@ -768,8 +890,7 @@ export default function Home() {
                       </div>
                       <div className="flex gap-2">
                         <CopyButton text={getCapText(capTab)} />
-                        <button
-                          onClick={() => handleUpload(capTab, pm.url)}
+                        <button onClick={() => handleUpload(capTab, pm.url)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-700 border border-slate-600 text-slate-200 hover:border-violet-500 hover:text-violet-300 transition-all">
                           ↗ Open {pm.name}
                         </button>
@@ -786,7 +907,7 @@ export default function Home() {
                 <div className="text-4xl">{isReady ? '🎉' : '✅'}</div>
                 <div>
                   <div className="font-bold text-lg" style={{ fontFamily: "'Fredoka One', cursive", color: isReady ? '#5bea8b' : '#a78bfa' }}>
-                    {isReady ? 'Final Video Ready — Ready to Post!' : 'Final Video Ready'}
+                    {isReady ? `Your ${selectedTypeMeta.label} Video is Ready!` : 'Video Production Complete'}
                   </div>
                   <div className="text-sm text-slate-400 mt-1">
                     Video: {finalScore.toFixed(1)}/10 · All 7 agents complete ·{' '}
@@ -822,8 +943,7 @@ export default function Home() {
                         </div>
                         <div className="flex gap-2 shrink-0">
                           <CopyButton text={txt} label="Copy" />
-                          <button
-                            onClick={() => handleUpload(pid, pm.url)}
+                          <button onClick={() => handleUpload(pid, pm.url)}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${published ? 'bg-emerald-900/40 border-emerald-700 text-emerald-300' : 'bg-violet-900/50 border-violet-600 text-violet-200 hover:bg-violet-900'}`}>
                             {published ? '↗ Re-upload' : '↗ Upload'}
                           </button>
@@ -832,8 +952,6 @@ export default function Home() {
                     )
                   })}
                 </div>
-
-                {/* Clear after publish */}
                 {publishedPlatforms.size > 0 && (
                   <div className="mt-4 p-4 bg-emerald-950/40 border border-emerald-700 rounded-xl flex items-center justify-between gap-4">
                     <div>
@@ -842,8 +960,7 @@ export default function Home() {
                       </div>
                       <div className="text-[11px] text-emerald-500 mt-0.5">Clear this video from storage to make room for the next one.</div>
                     </div>
-                    <button
-                      onClick={clearAfterPublish}
+                    <button onClick={clearAfterPublish}
                       className="shrink-0 px-4 py-2 rounded-xl text-[11px] font-bold bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600 transition-all">
                       🗑 Clear & New Video
                     </button>
@@ -898,7 +1015,7 @@ export default function Home() {
                       </>
                     ) : (
                       <>
-                        <div className="text-3xl">🎬</div>
+                        <div className="text-3xl">{selectedTypeMeta.icon}</div>
                         <span className="text-[11px] text-slate-500">Video appears here</span>
                       </>
                     )}
@@ -936,9 +1053,9 @@ export default function Home() {
                 style={{ background: running ? '#1e1a35' : 'linear-gradient(135deg,#ff6b9d,#c77dff)', color: '#fff', border: running ? '1px solid #3d3560' : 'none' }}
               >
                 {running ? (
-                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Running Pipeline...</>
+                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Pipeline Running...</>
                 ) : (
-                  <><span>✨</span>{cachedAt ? '🔄 Generate New Rhyme' : complete ? 'Generate New Rhyme' : 'Generate Rhyme'}</>
+                  <><span>{selectedTypeMeta.icon}</span>{cachedAt ? `🔄 Regenerate ${selectedTypeMeta.label}` : complete ? `New ${selectedTypeMeta.label}` : `Generate ${selectedTypeMeta.label}`}</>
                 )}
               </button>
 

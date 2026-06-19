@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server'
 import {
-  generateRhyme, reviewRhyme, planStoryboard,
+  generateContent, reviewRhyme, planStoryboard,
   generateVideoMetadata, reviewVideo, generateSocialAssets,
   NUM_CLIPS, CLIP_DURATION_SEC, TARGET_DURATION_SEC,
 } from '@/lib/agents'
 import { createJobId, saveJob } from '@/lib/jobStore'
-import type { ClipState, VideoJob } from '@/types'
+import type { ClipState, VideoJob, ContentType, CreativeBrief } from '@/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -16,6 +16,17 @@ function encode(chunk: object): string {
 }
 
 export async function GET(req: NextRequest) {
+  const url = new URL(req.url)
+  const contentType = (url.searchParams.get('type') ?? 'kids_rhyme') as ContentType
+  const userBrief = url.searchParams.get('brief') ?? undefined
+  const brief: CreativeBrief = { contentType, userBrief }
+
+  const contentLabels: Record<ContentType, string> = {
+    kids_rhyme: 'rhyme', poem: 'poem', short_film: 'script',
+    advertisement: 'ad script', educational: 'explainer', music_video: 'lyrics', custom: 'content',
+  }
+  const label = contentLabels[contentType] ?? 'content'
+
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
@@ -32,10 +43,11 @@ export async function GET(req: NextRequest) {
       }
 
       try {
-        log('🎬 Kids AI Video Studio pipeline started', 'info')
-        log(`Target video length: ~${TARGET_DURATION_SEC}s across ${NUM_CLIPS} clips of ${CLIP_DURATION_SEC}s each`, 'info')
+        log(`✨ AI Creative Studio pipeline started (${contentType.replace('_', ' ')})`, 'info')
+        log(`Target video: ~${TARGET_DURATION_SEC}s across ${NUM_CLIPS} clips of ${CLIP_DURATION_SEC}s each`, 'info')
+        if (userBrief) log(`Creative brief: "${userBrief}"`, 'info')
 
-        // ── STEP 1 + 2: Rhyme loop ───────────────────────────────────────────
+        // ── STEP 1 + 2: Content creation loop ───────────────────────────────
         let rhymeData = null
         let rhymeScore = null
         let rhymeFeedback = ''
@@ -43,32 +55,31 @@ export async function GET(req: NextRequest) {
 
         for (let attempt = 0; attempt < MAX_RHYME_RETRIES; attempt++) {
           setStep('rhyme', 'active')
-          log(`Rhyme Generator Agent starting... (attempt ${attempt + 1})`, 'agent')
+          log(`Content Creator Agent generating ${label}... (attempt ${attempt + 1})`, 'agent')
 
-          rhymeData = await generateRhyme(rhymeFeedback, attempt + 1)
+          rhymeData = await generateContent(rhymeFeedback, attempt + 1, brief)
           send('rhyme', rhymeData)
           setStep('rhyme', 'done')
-          log(`Rhyme generated — topic: ${rhymeData.topic}`, 'success')
+          log(`${label.charAt(0).toUpperCase() + label.slice(1)} generated — topic: ${rhymeData.topic}`, 'success')
 
-          // Review
           setStep('review', 'active')
-          log('Rhyme Reviewer Agent analyzing quality...', 'agent')
+          log(`Content Reviewer Agent analyzing quality...`, 'agent')
 
-          rhymeScore = await reviewRhyme(rhymeData.rhyme)
+          rhymeScore = await reviewRhyme(rhymeData.rhyme, brief)
           send('rhyme_score', rhymeScore)
 
           if (rhymeScore.approved) {
             setStep('review', 'done')
-            log(`Rhyme score: ${rhymeScore.total.toFixed(1)}/10 — APPROVED ✓`, 'success')
+            log(`Quality score: ${rhymeScore.total.toFixed(1)}/10 — APPROVED ✓`, 'success')
             break
           } else {
             setStep('review', 'failed')
-            log(`Rhyme score: ${rhymeScore.total.toFixed(1)}/10 — needs refinement`, 'warning')
+            log(`Quality score: ${rhymeScore.total.toFixed(1)}/10 — needs refinement`, 'warning')
             rhymeFeedback = rhymeScore.feedback.join('. ')
             if (attempt < MAX_RHYME_RETRIES - 1) {
-              log(`Sending feedback to Rhyme Agent: ${rhymeFeedback}`, 'warning')
+              log(`Sending feedback to Content Agent: ${rhymeFeedback}`, 'warning')
             } else {
-              log('Max retries reached — proceeding with best rhyme', 'warning')
+              log('Max retries reached — proceeding with best version', 'warning')
               rhymeScore = { ...rhymeScore, approved: true }
             }
           }
@@ -76,31 +87,31 @@ export async function GET(req: NextRequest) {
 
         // ── STEP 3: Storyboard ───────────────────────────────────────────────
         setStep('storyboard', 'active')
-        log(`Storyboard & Scene Planner Agent creating ${NUM_CLIPS} scenes...`, 'agent')
+        log(`Scene Director Agent planning ${NUM_CLIPS} scenes...`, 'agent')
 
-        const storyboard = await planStoryboard(rhymeData!.rhyme)
+        const storyboard = await planStoryboard(rhymeData!.rhyme, NUM_CLIPS, CLIP_DURATION_SEC, brief)
         send('storyboard', storyboard)
         setStep('storyboard', 'done')
         log(`Storyboard complete — ${storyboard.shots.length} shots, mood: ${storyboard.mood}`, 'success')
 
-        // ── STEP 4: Video Generator (production metadata) ───────────────────
+        // ── STEP 4: Video Producer (production metadata) ─────────────────────
         setStep('video', 'active')
-        log('Video Generator Agent building production metadata...', 'agent')
+        log('Video Producer Agent building production package...', 'agent')
 
-        const videoMeta = await generateVideoMetadata(rhymeData!.rhyme, storyboard)
+        const videoMeta = await generateVideoMetadata(rhymeData!.rhyme, storyboard, brief)
         send('video_meta', videoMeta)
         setStep('video', 'done')
         log('Video production package complete ✓', 'success')
 
-        // ── STEP 5: Video Review loop ────────────────────────────────────────
+        // ── STEP 5: Quality review loop ──────────────────────────────────────
         let videoScore = null
         const MAX_VIDEO_RETRIES = 3
 
         for (let attempt = 0; attempt < MAX_VIDEO_RETRIES; attempt++) {
           setStep('vreview', 'active')
-          log(`Video Quality Reviewer scoring... (attempt ${attempt + 1})`, 'agent')
+          log(`Quality Director scoring production plan... (attempt ${attempt + 1})`, 'agent')
 
-          videoScore = await reviewVideo(storyboard, rhymeData!.rhyme, videoMeta)
+          videoScore = await reviewVideo(storyboard, rhymeData!.rhyme, videoMeta, brief)
           send('video_score', videoScore)
 
           if (videoScore.approved) {
@@ -116,11 +127,11 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // ── STEP 6: Social Publishing ────────────────────────────────────────
+        // ── STEP 6: Social Publisher ─────────────────────────────────────────
         setStep('publish', 'active')
         log('Social Publisher Agent generating platform assets...', 'agent')
 
-        const captions = await generateSocialAssets(rhymeData!.rhyme, storyboard, videoScore!)
+        const captions = await generateSocialAssets(rhymeData!.rhyme, storyboard, videoScore!, brief)
         send('captions', captions)
         setStep('publish', 'done')
         log('Social assets ready for YouTube, Instagram, Facebook, TikTok ✓', 'success')
@@ -146,12 +157,13 @@ export async function GET(req: NextRequest) {
           clipDurationSec: CLIP_DURATION_SEC,
           targetDurationSec: TARGET_DURATION_SEC,
           clips,
+          contentType,
+          userBrief,
         }
         await saveJob(job)
         send('job', job)
         log(`Render job ${job.id} created — ${clips.length} clips queued (~${job.targetDurationSec}s total)`, 'success')
 
-        // Done
         const finalScore = videoScore!.total
         send('complete', { videoScore: finalScore, rhymeScore: rhymeScore!.total })
         log(`Pre-production complete! Plan: ${finalScore.toFixed(1)}/10 — ${finalScore > 8 ? '🎉 Looking great!' : '✅ Good to go'}`, 'success')

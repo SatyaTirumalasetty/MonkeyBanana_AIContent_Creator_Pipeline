@@ -6,7 +6,7 @@ import path from 'path'
 import ffmpegPath from '@ffmpeg-installer/ffmpeg'
 import ffmpeg from 'fluent-ffmpeg'
 import { loadJob, saveJob, saveClip, saveReferenceImage } from '@/lib/jobStore'
-import type { StoryboardShot, Storyboard } from '@/types'
+import type { StoryboardShot, Storyboard, ContentType } from '@/types'
 
 ffmpeg.setFfmpegPath(ffmpegPath.path)
 
@@ -16,12 +16,23 @@ export const maxDuration = 300
 
 const CLIP_DURATION = '5' as const
 const ASPECT_RATIO = '9:16' as const
-const NEGATIVE_PROMPT = 'adult content, violence, scary content, disturbing imagery, dark themes, complex text'
+const NEGATIVE_PROMPT = 'adult content, violence, disturbing imagery, watermarks, text overlays'
 
-function buildKlingPrompt(shot: StoryboardShot, storyboard: Storyboard): string {
-  const mood = storyboard.mood || 'joyful'
+const KLING_STYLE: Record<ContentType, string> = {
+  kids_rhyme:    'vibrant colors, smooth motion, toddler friendly, anime cartoon style',
+  poem:          'cinematic, soft atmospheric lighting, artistic composition, 4K quality',
+  short_film:    'cinematic drama, realistic, subtle film grain, professional lighting',
+  advertisement: 'commercial, clean modern aesthetic, high production value, lifestyle',
+  educational:   'clean explainer style, bright and clear, infographic elements',
+  music_video:   'dynamic, energetic, stylized vibrant lighting, music video aesthetic',
+  custom:        'professional, cinematic, high quality, visually compelling',
+}
+
+function buildKlingPrompt(shot: StoryboardShot, storyboard: Storyboard, contentType?: ContentType): string {
+  const mood = storyboard.mood || 'cinematic'
   const bgStyle = storyboard.backgroundStyle || 'colorful'
-  return `${shot.description}, ${shot.camera}. ${mood} kids animation, ${bgStyle}, vibrant colors, smooth motion, toddler friendly, anime cartoon style`
+  const style = KLING_STYLE[contentType ?? 'kids_rhyme']
+  return `${shot.description}, ${shot.camera}. ${mood} atmosphere, ${bgStyle}, ${style}`
 }
 
 async function extractLastFrame(videoBuffer: Buffer): Promise<Buffer> {
@@ -73,7 +84,7 @@ export async function POST(req: NextRequest) {
     if (process.env.FAL_KEY) {
       // ── Kling AI path ──────────────────────────────────────────────────────
       fal.config({ credentials: process.env.FAL_KEY })
-      const prompt = buildKlingPrompt(shot, job.storyboard)
+      const prompt = buildKlingPrompt(shot, job.storyboard, job.contentType)
 
       if (clipIndex === 0 || !job.referenceImageUrl) {
         // Scene 0: text-to-video establishes the visual style and characters

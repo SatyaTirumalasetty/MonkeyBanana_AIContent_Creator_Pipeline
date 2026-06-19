@@ -1,5 +1,19 @@
 export type StepStatus = 'idle' | 'active' | 'done' | 'failed'
 
+export type ContentType =
+  | 'kids_rhyme'
+  | 'poem'
+  | 'short_film'
+  | 'advertisement'
+  | 'educational'
+  | 'music_video'
+  | 'custom'
+
+export interface CreativeBrief {
+  contentType: ContentType
+  userBrief?: string
+}
+
 export type PipelineEvent =
   | 'RHYME_GENERATED'
   | 'RHYME_APPROVED'
@@ -142,6 +156,8 @@ export interface VideoJob {
   clipDurationSec: number
   targetDurationSec: number
   clips: ClipState[]
+  contentType?: ContentType
+  userBrief?: string
   referenceImageUrl?: string
   finalVideoUrl?: string
   error?: string

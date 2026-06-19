@@ -15,3 +15,34 @@ body {
 .scrollbar-thin::-webkit-scrollbar { width: 4px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thumb-slate-700::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+/* Agent character action animations — each reflects the agent's real-world action */
+@keyframes agent-write {
+  0%, 100% { transform: rotate(-12deg); }
+  50% { transform: rotate(12deg); }
+}
+@keyframes agent-scan {
+  0%, 100% { transform: translateX(-8px); }
+  50% { transform: translateX(8px); }
+}
+@keyframes agent-paint {
+  0% { transform: translate(-3px, -4px) scale(1.05); }
+  100% { transform: translate(3px, 4px) scale(0.95); }
+}
+@keyframes agent-zoom {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.12); }
+}
+@keyframes agent-nod {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(-5px) rotate(-5deg); }
+}
+@keyframes agent-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes agent-flutter {
+  0% { transform: scale(1) rotate(-5deg); }
+  33% { transform: scale(1.1) rotate(8deg); }
+  66% { transform: scale(0.95) rotate(-10deg); }
+  100% { transform: scale(1) rotate(-5deg); }
+}
