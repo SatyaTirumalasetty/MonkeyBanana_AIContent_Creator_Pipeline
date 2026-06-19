@@ -1,14 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateVeoClip } from '@/lib/agents'
-import { loadJob, saveJob, saveClip } from '@/lib/jobStore'
+import { fal } from '@fal-ai/client'
+import { promises as fs } from 'fs'
+import os from 'os'
+import path from 'path'
+import ffmpegPath from '@ffmpeg-installer/ffmpeg'
+import ffmpeg from 'fluent-ffmpeg'
+import { loadJob, saveJob, saveClip, saveReferenceImage } from '@/lib/jobStore'
+import type { StoryboardShot, Storyboard } from '@/types'
+
+ffmpeg.setFfmpegPath(ffmpegPath.path)
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-// Generates (or resumes) a single clip for a job. Designed to be called
-// repeatedly by the client, one clip at a time, until the whole job's
-// clips array is all 'done' (or 'error').
+const CLIP_DURATION = '5' as const
+const ASPECT_RATIO = '9:16' as const
+const NEGATIVE_PROMPT = 'adult content, violence, scary content, disturbing imagery, dark themes, complex text'
+
+function buildKlingPrompt(shot: StoryboardShot, storyboard: Storyboard): string {
+  const mood = storyboard.mood || 'joyful'
+  const bgStyle = storyboard.backgroundStyle || 'colorful'
+  return `${shot.description}, ${shot.camera}. ${mood} kids animation, ${bgStyle}, vibrant colors, smooth motion, toddler friendly, anime cartoon style`
+}
+
+async function extractLastFrame(videoBuffer: Buffer): Promise<Buffer> {
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kids-ref-'))
+  const inputPath = path.join(workDir, 'clip.mp4')
+  const outputPath = path.join(workDir, 'frame.png')
+  try {
+    await fs.writeFile(inputPath, videoBuffer)
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(inputPath)
+        .seekInput(4.0)
+        .outputOptions(['-vframes', '1'])
+        .output(outputPath)
+        .on('end', () => resolve())
+        .on('error', (err) => reject(err))
+        .run()
+    })
+    return await fs.readFile(outputPath)
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true })
+  }
+}
+
+// Renders a single AI video clip for a job.
+// When FAL_KEY is set: uses Kling AI via fal.ai (scene 0 = text-to-video;
+// scenes 1+ = image-to-video with scene 0's last frame as character reference).
+// When FAL_KEY is absent: falls back to a canvas-drawn still frame animated
+// with a Ken Burns zoom via ffmpeg — no external API needed.
 export async function POST(req: NextRequest) {
   const { jobId, clipIndex } = await req.json() as { jobId: string; clipIndex: number }
 
@@ -26,24 +67,64 @@ export async function POST(req: NextRequest) {
   await saveJob(job)
 
   try {
-    const result = await generateVeoClip(clip.prompt, {
-      durationSeconds: clip.durationSec,
-      operationName: clip.operationName,
-      maxWaitMs: 270000,
-    })
+    const shot = job.storyboard.shots[clipIndex]
+    let videoBuffer: Buffer
 
-    if (result.status === 'done' && result.bytes) {
-      const url = await saveClip(job.id, clip.index, result.bytes, result.mimeType ?? 'video/mp4')
-      clip.status = 'done'
-      clip.url = url
-      delete clip.operationName
-    } else if (result.status === 'pending') {
-      clip.status = 'generating'
-      clip.operationName = result.operationName
+    if (process.env.FAL_KEY) {
+      // ── Kling AI path ──────────────────────────────────────────────────────
+      fal.config({ credentials: process.env.FAL_KEY })
+      const prompt = buildKlingPrompt(shot, job.storyboard)
+
+      if (clipIndex === 0 || !job.referenceImageUrl) {
+        // Scene 0: text-to-video establishes the visual style and characters
+        const result = await fal.run('fal-ai/kling-video/v1.6/standard/text-to-video', {
+          input: {
+            prompt,
+            negative_prompt: NEGATIVE_PROMPT,
+            duration: CLIP_DURATION,
+            aspect_ratio: ASPECT_RATIO,
+          },
+        }) as unknown as { video: { url: string } }
+
+        const res = await fetch(result.video.url)
+        if (!res.ok) throw new Error(`Failed to download Kling clip 0: ${res.status}`)
+        videoBuffer = Buffer.from(await res.arrayBuffer())
+
+        // Extract last frame and save as reference for all subsequent scenes
+        const frameBuffer = await extractLastFrame(videoBuffer)
+        job.referenceImageUrl = await saveReferenceImage(job.id, frameBuffer)
+      } else {
+        // Scenes 1+: image-to-video locks character appearance via reference frame
+        const result = await fal.run('fal-ai/kling-video/v1.6/pro/image-to-video', {
+          input: {
+            prompt,
+            image_url: job.referenceImageUrl,
+            negative_prompt: NEGATIVE_PROMPT,
+            duration: CLIP_DURATION,
+            aspect_ratio: ASPECT_RATIO,
+          },
+        }) as unknown as { video: { url: string } }
+
+        const res = await fetch(result.video.url)
+        if (!res.ok) throw new Error(`Failed to download Kling clip ${clipIndex}: ${res.status}`)
+        videoBuffer = Buffer.from(await res.arrayBuffer())
+      }
     } else {
-      clip.status = 'error'
-      clip.error = result.error ?? 'Unknown Veo error'
+      // ── Canvas slideshow fallback (no FAL_KEY needed) ──────────────────────
+      // Draws a styled still frame with @napi-rs/canvas and animates it with
+      // a Ken Burns zoom using ffmpeg — fully self-contained, no external APIs.
+      const [{ renderShotFrame, captionForShot }, { renderSlideClip }] = await Promise.all([
+        import('@/lib/renderShot'),
+        import('@/lib/renderClip'),
+      ])
+      const caption = captionForShot(shot, job.videoMeta)
+      const frameBuffer = renderShotFrame(shot, caption, clipIndex)
+      videoBuffer = await renderSlideClip(frameBuffer, clip.durationSec, clipIndex % 2 === 0)
     }
+
+    const url = await saveClip(job.id, clip.index, videoBuffer, 'video/mp4')
+    clip.status = 'done'
+    clip.url = url
   } catch (err) {
     clip.status = 'error'
     clip.error = err instanceof Error ? err.message : 'Unknown error'

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import {
   generateRhyme, reviewRhyme, planStoryboard,
   generateVideoMetadata, reviewVideo, generateSocialAssets,
-  buildClipPrompt, NUM_CLIPS, CLIP_DURATION_SEC, TARGET_DURATION_SEC,
+  NUM_CLIPS, CLIP_DURATION_SEC, TARGET_DURATION_SEC,
 } from '@/lib/agents'
 import { createJobId, saveJob } from '@/lib/jobStore'
 import type { ClipState, VideoJob } from '@/types'
@@ -125,36 +125,31 @@ export async function GET(req: NextRequest) {
         setStep('publish', 'done')
         log('Social assets ready for YouTube, Instagram, Facebook, TikTok ✓', 'success')
 
-        // ── Create video generation job ──────────────────────────────────────
-        if (process.env.GOOGLE_API_KEY) {
-          setStep('render', 'active')
-          log('Creating video render job...', 'agent')
+        // ── Create video render job ──────────────────────────────────────────
+        setStep('render', 'active')
+        log('Creating video render job...', 'agent')
 
-          const clips: ClipState[] = storyboard.shots.map((shot, i) => ({
-            index: i,
-            prompt: buildClipPrompt(videoMeta.videoPrompt, storyboard, shot),
-            durationSec: CLIP_DURATION_SEC,
-            status: 'pending',
-          }))
+        const clips: ClipState[] = storyboard.shots.map((_, i) => ({
+          index: i,
+          durationSec: CLIP_DURATION_SEC,
+          status: 'pending',
+        }))
 
-          const job: VideoJob = {
-            id: await createJobId(),
-            createdAt: new Date().toISOString(),
-            status: 'generating_clips',
-            rhyme: rhymeData!,
-            rhymeScore: rhymeScore!,
-            storyboard,
-            videoMeta,
-            clipDurationSec: CLIP_DURATION_SEC,
-            targetDurationSec: TARGET_DURATION_SEC,
-            clips,
-          }
-          await saveJob(job)
-          send('job', job)
-          log(`Render job ${job.id} created — ${clips.length} clips queued (~${job.targetDurationSec}s total)`, 'success')
-        } else {
-          log('Add GOOGLE_API_KEY to .env.local to enable real Gemini Veo video rendering', 'info')
+        const job: VideoJob = {
+          id: await createJobId(),
+          createdAt: new Date().toISOString(),
+          status: 'generating_clips',
+          rhyme: rhymeData!,
+          rhymeScore: rhymeScore!,
+          storyboard,
+          videoMeta,
+          clipDurationSec: CLIP_DURATION_SEC,
+          targetDurationSec: TARGET_DURATION_SEC,
+          clips,
         }
+        await saveJob(job)
+        send('job', job)
+        log(`Render job ${job.id} created — ${clips.length} clips queued (~${job.targetDurationSec}s total)`, 'success')
 
         // Done
         const finalScore = videoScore!.total

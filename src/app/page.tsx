@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, Fragment } from 'react'
 import type { LogEntry, RhymeData, RhymeScore, Storyboard, VideoScore, SocialCaptions, VideoMeta, VideoJob, Platform } from '@/types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -21,6 +21,17 @@ const PLATFORM_META = {
   instagram: { name: 'Instagram Reels', icon: '📸', url: 'https://www.instagram.com',              color: '#E1306C', desc: 'Open app → Reels → +' },
   facebook:  { name: 'Facebook Reels',  icon: '👍', url: 'https://www.facebook.com/reels/create', color: '#1877F2', desc: 'Reels → Create Reel' },
   tiktok:    { name: 'TikTok',          icon: '🎵', url: 'https://www.tiktok.com/upload',         color: '#000000', desc: 'TikTok → + → Upload' },
+}
+
+// ── Agent characters ──────────────────────────────────────────────────────────
+const AGENT_CHARS: Record<StepId, { char: string; name: string; role: string; color: string; tagline: string }> = {
+  rhyme:      { char: '🐝', name: 'Lyra',   role: 'Poet Bee',         color: '#c77dff', tagline: 'Crafts magical rhymes for little ones' },
+  review:     { char: '🦉', name: 'Rex',    role: 'Scholar Owl',      color: '#4cc9f0', tagline: 'Checks every word for quality' },
+  storyboard: { char: '🦊', name: 'Stormy', role: 'Artist Fox',       color: '#ff9f43', tagline: 'Paints vivid scenes for the story' },
+  video:      { char: '🐱', name: 'Vince',  role: 'Director Cat',     color: '#ff6b9d', tagline: 'Builds the full production package' },
+  vreview:    { char: '🐰', name: 'Stella', role: 'Critic Rabbit',    color: '#5bea8b', tagline: 'Scores the video before it ships' },
+  render:     { char: '🤖', name: 'Robo',   role: 'Engineer Bot',     color: '#f8c537', tagline: 'Renders and stitches every clip' },
+  publish:    { char: '🦋', name: 'Pixel',  role: 'Social Butterfly', color: '#56cfb2', tagline: 'Prepares assets for every platform' },
 }
 
 // ── Score Bar ─────────────────────────────────────────────────────────────────
@@ -48,6 +59,84 @@ function CopyButton({ text, label = 'Copy caption' }: { text: string; label?: st
     <button onClick={copy} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${copied ? 'bg-emerald-900/30 border-emerald-600 text-emerald-400' : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-violet-500 hover:text-violet-300'}`}>
       {copied ? '✓ Copied!' : `📋 ${label}`}
     </button>
+  )
+}
+
+// ── Agent Card ────────────────────────────────────────────────────────────────
+function AgentCard({ stepId, status, message }: {
+  stepId: StepId; status: StepStatus; message: string
+}) {
+  const a = AGENT_CHARS[stepId]
+  const isActive = status === 'active'
+  const isDone = status === 'done'
+  const isFailed = status === 'failed'
+
+  return (
+    <div
+      className={`relative flex flex-col items-center px-2 pt-4 pb-3 rounded-2xl border-2 transition-all duration-500 overflow-hidden ${status === 'idle' ? 'opacity-30' : ''}`}
+      style={{
+        minHeight: 210,
+        borderColor: isActive ? a.color : isDone ? '#10b981' : isFailed ? '#f59e0b' : '#1e293b',
+        background: isActive ? `${a.color}0a` : 'transparent',
+        boxShadow: isActive ? `0 0 28px ${a.color}45` : 'none',
+      }}
+    >
+      {/* Radial glow pulse */}
+      {isActive && (
+        <div
+          className="absolute inset-0 pointer-events-none animate-pulse"
+          style={{ background: `radial-gradient(ellipse at 50% 25%, ${a.color}22 0%, transparent 70%)` }}
+        />
+      )}
+
+      {/* Avatar */}
+      <div className="relative mb-2">
+        <div
+          className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl transition-all duration-300 ${isActive ? 'animate-bounce' : ''}`}
+          style={{
+            background: status === 'idle' ? '#0f172a' : `${a.color}18`,
+            border: `2px solid ${status === 'idle' ? '#1e293b' : a.color}55`,
+          }}
+        >
+          {isDone ? '🥳' : isFailed ? '😰' : a.char}
+        </div>
+        {isActive && (
+          <div
+            className="absolute -inset-1.5 rounded-full animate-ping opacity-20 pointer-events-none"
+            style={{ border: `2px solid ${a.color}` }}
+          />
+        )}
+        {isDone && (
+          <div className="absolute -top-1 -right-1 text-sm leading-none">✅</div>
+        )}
+      </div>
+
+      {/* Name + role */}
+      <div className="text-[11px] font-extrabold text-white text-center leading-tight">{a.name}</div>
+      <div className="text-[9px] text-slate-400 text-center mb-2">{a.role}</div>
+
+      {/* Status badge */}
+      <div
+        className="text-[8px] font-bold px-2 py-0.5 rounded-full mb-2 shrink-0"
+        style={{
+          background: `${isActive ? a.color : isDone ? '#10b981' : isFailed ? '#f59e0b' : '#334155'}22`,
+          color: isActive ? a.color : isDone ? '#34d399' : isFailed ? '#fbbf24' : '#475569',
+          border: `1px solid ${isActive ? a.color : isDone ? '#10b981' : isFailed ? '#f59e0b' : '#334155'}44`,
+        }}
+      >
+        {isActive ? '⚡ Working' : isDone ? '✓ Done' : isFailed ? '⚠ Retry' : '○ Idle'}
+      </div>
+
+      {/* Activity message or tagline */}
+      <div
+        className="text-[8px] text-center leading-tight px-0.5 line-clamp-3"
+        style={{ color: isActive ? `${a.color}cc` : '#334155' }}
+      >
+        {isActive && message
+          ? message.replace(/Error:\s*\{.*\}/s, 'API busy — retrying…').replace(/^(Pipeline error|Error):\s*/i, '⚠ ')
+          : a.tagline}
+      </div>
+    </div>
   )
 }
 
@@ -182,7 +271,7 @@ function VideoPlayer({ videoUrl, videoScore }: { videoUrl: string; videoScore: V
         </div>
       )}
       <div className="px-3 py-2 text-[9px] text-violet-400 font-bold text-center bg-violet-950/30">
-        ✨ Generated by Gemini Veo
+        ✨ AI-generated video by Kling AI
       </div>
     </div>
   )
@@ -209,8 +298,10 @@ export default function Home() {
   const [publishedPlatforms, setPublishedPlatforms] = useState<Set<Platform>>(new Set())
   const [capTab, setCapTab] = useState<Platform>('youtube')
   const [showPublish, setShowPublish] = useState(false)
+  const [agentMessages, setAgentMessages] = useState<Partial<Record<StepId, string>>>({})
   const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const activeStepRef = useRef<StepId | null>(null)
 
   // Load from cache on mount
   useEffect(() => {
@@ -254,10 +345,17 @@ export default function Home() {
   const addLog = useCallback((msg: string, type: LogEntry['type'] = '') => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false })
     setLogs(prev => [...prev, { time, msg, type }])
+    const stepId = activeStepRef.current
+    if (stepId) setAgentMessages(prev => ({ ...prev, [stepId]: msg }))
   }, [])
 
   const setStep = useCallback((id: StepId, status: StepStatus) => {
     setSteps(prev => ({ ...prev, [id]: status }))
+    if (status === 'active') {
+      activeStepRef.current = id
+    } else if ((status === 'done' || status === 'failed') && activeStepRef.current === id) {
+      activeStepRef.current = null
+    }
   }, [])
 
   const reset = useCallback(() => {
@@ -269,10 +367,12 @@ export default function Home() {
     setRhyme(null); setRhymeScore(null); setStoryboard(null)
     setVideoScore(null); setCaptions(null); setVideoMeta(null); setJob(null)
     setComplete(false); setShowPublish(false)
+    setAgentMessages({})
+    activeStepRef.current = null
   }, [])
 
-  // Generates one Veo clip via the API, retrying (resuming the same operation)
-  // until it's done or errors out. Returns the updated job.
+  // Renders one slideshow clip via the API, retrying on transient errors
+  // until it's done or fails. Returns the updated job.
   const renderClip = useCallback(async (jobId: string, clipIndex: number, signal: AbortSignal): Promise<VideoJob> => {
     const MAX_ATTEMPTS = 12 // ~12 * up to 270s = generous ceiling per clip
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -363,6 +463,10 @@ export default function Home() {
             switch (chunk.type) {
               case 'log':
                 setLogs(prev => [...prev, { time: chunk.payload.time, msg: chunk.payload.msg, type: chunk.payload.type }])
+                {
+                  const stepId = activeStepRef.current
+                  if (stepId) setAgentMessages(prev => ({ ...prev, [stepId]: chunk.payload.msg as string }))
+                }
                 break
               case 'step':
                 setStep(chunk.payload.id as StepId, chunk.payload.status as StepStatus)
@@ -446,19 +550,12 @@ export default function Home() {
     return `${c.title}\n\n${c.caption}\n\n${c.cta}\n\n${c.hashtags.map(h => '#' + h.replace('#', '')).join(' ')}`
   }
 
-  const stepColors: Record<StepStatus, string> = {
-    idle: 'border-slate-700 bg-slate-900',
-    active: 'border-violet-500 bg-violet-950/50',
-    done: 'border-emerald-600 bg-emerald-950/40',
-    failed: 'border-amber-500 bg-amber-950/30',
-  }
-
   const finalScore = videoScore?.total ?? 0
   const isReady = finalScore > 8
 
   return (
     <div className="min-h-screen bg-[#0a0815] text-white" style={{ fontFamily: "'Nunito', sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap');`}</style>
+      <style suppressHydrationWarning>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap');`}</style>
 
       {/* Header */}
       <div className="border-b border-slate-800 px-6 py-4">
@@ -467,7 +564,7 @@ export default function Home() {
             <h1 className="text-2xl font-bold" style={{ fontFamily: "'Fredoka One', cursive", background: 'linear-gradient(135deg,#ff6b9d,#c77dff,#4cc9f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               🎬 Kids AI Video Studio
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">Autonomous 6-agent pipeline · Powered by Gemini AI · SSE streaming</p>
+            <p className="text-xs text-slate-500 mt-0.5">Autonomous 6-agent pipeline · Gemini AI + Kling AI video · SSE streaming</p>
           </div>
           <div className="flex items-center gap-2">
             {cachedAt && !running && (
@@ -491,22 +588,45 @@ export default function Home() {
           {/* LEFT */}
           <div className="flex flex-col gap-5">
 
-            {/* Pipeline Steps */}
+            {/* Agent Pipeline — visual character stage */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Agent Pipeline</div>
-              <div className="grid grid-cols-7 gap-2">
-                {STEPS.map(s => {
-                  const st = steps[s.id]
-                  return (
-                    <div key={s.id} className={`border rounded-xl p-3 transition-all duration-200 ${stepColors[st]}`}>
-                      <div className="text-lg mb-1">{st === 'done' ? '✅' : st === 'active' ? '⚡' : st === 'failed' ? '⚠️' : s.icon}</div>
-                      <div className="text-[10px] font-bold text-white leading-tight">{s.name}</div>
-                      <div className="text-[9px] text-slate-400 mt-1">
-                        {st === 'active' ? s.sub : st === 'done' ? 'Complete' : st === 'failed' ? 'Retrying...' : 'Waiting'}
-                      </div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">AI Agent Crew</div>
+                {running && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+                    <span className="text-[9px] text-violet-400 font-bold">Pipeline active</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-stretch gap-1">
+                {STEPS.map((s, i) => (
+                  <Fragment key={s.id}>
+                    <div className="flex-1 min-w-0">
+                      <AgentCard
+                        stepId={s.id}
+                        status={steps[s.id]}
+                        message={agentMessages[s.id] ?? ''}
+                      />
                     </div>
-                  )
-                })}
+                    {i < STEPS.length - 1 && (
+                      <div className="flex items-center self-stretch shrink-0 px-0.5 pt-2">
+                        <div
+                          className="text-xs transition-all duration-500"
+                          style={{
+                            color: steps[STEPS[i + 1].id] === 'active' ? AGENT_CHARS[STEPS[i + 1].id].color :
+                                   steps[s.id] === 'done' ? '#10b981' : '#1e293b',
+                            textShadow: steps[STEPS[i + 1].id] === 'active'
+                              ? `0 0 8px ${AGENT_CHARS[STEPS[i + 1].id].color}`
+                              : 'none',
+                          }}
+                        >
+                          →
+                        </div>
+                      </div>
+                    )}
+                  </Fragment>
+                ))}
               </div>
             </div>
 
@@ -595,11 +715,7 @@ export default function Home() {
                   <CopyButton text={videoMeta.audioScript} label="Copy script" />
                 </div>
                 <div className="mt-3 p-3 bg-violet-950/40 border border-violet-800 rounded-xl text-[11px] text-violet-300">
-                  💡 <strong>To generate real video:</strong> Copy the prompt above and use it with{' '}
-                  <a href="https://runwayml.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-violet-100">Runway ML</a>,{' '}
-                  <a href="https://kling.kuaishou.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-violet-100">Kling AI</a>, or{' '}
-                  <a href="https://pika.art" target="_blank" rel="noopener noreferrer" className="underline hover:text-violet-100">Pika</a>.
-                  Add their API key to <code className="bg-slate-800 px-1 rounded">.env.local</code> to automate this step.
+                  🎬 <strong>Kling AI integrated:</strong> Each scene is generated as a real AI video clip via fal.ai. Set <code className="bg-slate-800 px-1 rounded">FAL_KEY</code> in <code className="bg-slate-800 px-1 rounded">.env.local</code> to enable.
                 </div>
               </div>
             )}

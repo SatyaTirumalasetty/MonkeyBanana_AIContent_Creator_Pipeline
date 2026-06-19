@@ -123,12 +123,10 @@ export type ClipStatus = 'pending' | 'generating' | 'done' | 'error'
 
 export interface ClipState {
   index: number
-  prompt: string
   durationSec: number
   status: ClipStatus
   url?: string
   error?: string
-  operationName?: string
 }
 
 export type JobStatus = 'pending' | 'generating_clips' | 'stitching' | 'complete' | 'error'
@@ -144,6 +142,7 @@ export interface VideoJob {
   clipDurationSec: number
   targetDurationSec: number
   clips: ClipState[]
+  referenceImageUrl?: string
   finalVideoUrl?: string
   error?: string
 }

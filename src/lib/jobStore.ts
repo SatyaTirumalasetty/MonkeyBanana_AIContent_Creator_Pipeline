@@ -29,6 +29,11 @@ export async function saveClip(jobId: string, clipIndex: number, bytes: Buffer, 
   return url
 }
 
+export async function saveReferenceImage(jobId: string, bytes: Buffer): Promise<string> {
+  const { url } = await put(`jobs/${jobId}/ref-frame.png`, bytes, { ...blobOpts, contentType: 'image/png' })
+  return url
+}
+
 export async function saveFinalVideo(jobId: string, bytes: Buffer): Promise<string> {
   const { url } = await put(`jobs/${jobId}/final.mp4`, bytes, { ...blobOpts, contentType: 'video/mp4' })
   return url
