@@ -15,11 +15,18 @@ export async function saveJob(job: VideoJob): Promise<void> {
 }
 
 export async function loadJob(id: string): Promise<VideoJob | null> {
-  const { blobs } = await list({ prefix: `jobs/${id}/state.json`, limit: 1 })
-  if (!blobs.length) return null
-  const res = await fetch(blobs[0].url, { cache: 'no-store' })
-  if (!res.ok) return null
-  return res.json() as Promise<VideoJob>
+  // Vercel Blob list() uses S3 which can have eventual-consistency lag after a
+  // fresh put(). Retry up to 4 times with backoff so the stitch route doesn't
+  // fail immediately after the last clip is saved.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { blobs } = await list({ prefix: `jobs/${id}/state.json`, limit: 1 })
+    if (blobs.length) {
+      const res = await fetch(blobs[0].url, { cache: 'no-store' })
+      if (res.ok) return res.json() as Promise<VideoJob>
+    }
+    if (attempt < 3) await new Promise(r => setTimeout(r, 750 * (attempt + 1)))
+  }
+  return null
 }
 
 export async function saveClip(jobId: string, clipIndex: number, bytes: Buffer, mimeType: string): Promise<string> {
