@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
           try {
             const fluxPrompt = `${shot.description}, ${shot.camera}. ${FLUX_STYLE[job.contentType ?? 'custom']}`
             const fluxResult = await fal.run('fal-ai/flux/schnell', {
-              input: { prompt: fluxPrompt, image_size: 'portrait_9_16', num_images: 1 },
+              input: { prompt: fluxPrompt, image_size: 'portrait_16_9', num_images: 1 },
             }) as unknown as { images: Array<{ url: string }> }
             const imgRes = await fetch(fluxResult.images[0].url)
             if (!imgRes.ok) throw new Error(`Flux download failed: ${imgRes.status}`)

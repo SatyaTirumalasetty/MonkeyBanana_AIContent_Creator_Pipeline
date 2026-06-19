@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback, useEffect, Fragment } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import type {
   LogEntry, RhymeData, RhymeScore, Storyboard, VideoScore,
   SocialCaptions, VideoMeta, VideoJob, Platform, ContentType,
@@ -9,16 +9,6 @@ import type {
 type StepStatus = 'idle' | 'active' | 'done' | 'failed'
 type StepId = 'rhyme' | 'review' | 'storyboard' | 'video' | 'vreview' | 'render' | 'publish'
 
-const STEPS: { id: StepId; name: string }[] = [
-  { id: 'rhyme',      name: 'Content Creator' },
-  { id: 'review',     name: 'Content Reviewer' },
-  { id: 'storyboard', name: 'Scene Director' },
-  { id: 'video',      name: 'Video Producer' },
-  { id: 'vreview',    name: 'Quality Director' },
-  { id: 'render',     name: 'Video Renderer' },
-  { id: 'publish',    name: 'Social Publisher' },
-]
-
 const PLATFORM_META = {
   youtube:   { name: 'YouTube Shorts',  icon: '▶️', url: 'https://studio.youtube.com',           color: '#FF0000', desc: 'Upload → Create → Upload video' },
   instagram: { name: 'Instagram Reels', icon: '📸', url: 'https://www.instagram.com',              color: '#E1306C', desc: 'Open app → Reels → +' },
@@ -26,31 +16,17 @@ const PLATFORM_META = {
   tiktok:    { name: 'TikTok',          icon: '🎵', url: 'https://www.tiktok.com/upload',         color: '#000000', desc: 'TikTok → + → Upload' },
 }
 
-// ── Agent characters — each with unique action-reflecting animation ────────────
-const AGENT_CHARS: Record<StepId, {
-  char: string; name: string; role: string; color: string; tagline: string; action: string; animation: string
-}> = {
-  rhyme:      { char: '🐝', name: 'Lyra',   role: 'Content Creator',  color: '#c77dff', tagline: 'Crafts compelling scripts & content', action: '✏️', animation: 'agent-write 0.8s ease-in-out infinite' },
-  review:     { char: '🦉', name: 'Rex',    role: 'Scholar Owl',      color: '#4cc9f0', tagline: 'Scores quality across 6 dimensions', action: '🔍', animation: 'agent-scan 1s ease-in-out infinite' },
-  storyboard: { char: '🦊', name: 'Stormy', role: 'Artist Fox',       color: '#ff9f43', tagline: 'Paints each visual scene into life', action: '🎨', animation: 'agent-paint 1.2s ease-in-out infinite alternate' },
-  video:      { char: '🐱', name: 'Vince',  role: 'Director Cat',     color: '#ff6b9d', tagline: 'Builds the full production package', action: '🎬', animation: 'agent-zoom 1s ease-in-out infinite alternate' },
-  vreview:    { char: '🐰', name: 'Stella', role: 'Critic Rabbit',    color: '#5bea8b', tagline: 'Scores the video before it ships', action: '⭐', animation: 'agent-nod 0.6s ease-in-out infinite alternate' },
-  render:     { char: '🤖', name: 'Robo',   role: 'Engineer Bot',     color: '#f8c537', tagline: 'Renders and stitches every clip', action: '⚙️', animation: 'agent-spin 2s linear infinite' },
-  publish:    { char: '🦋', name: 'Pixel',  role: 'Social Butterfly', color: '#56cfb2', tagline: 'Prepares assets for every platform', action: '📤', animation: 'agent-flutter 0.9s ease-in-out infinite' },
-}
-
-// ── Content type definitions ───────────────────────────────────────────────────
 const CONTENT_TYPES: {
   id: ContentType; label: string; icon: string; color: string
   gradient: string; placeholder: string; desc: string
 }[] = [
-  { id: 'kids_rhyme',    label: 'Kids Rhyme',    icon: '🎠', color: '#c77dff', gradient: 'linear-gradient(135deg,#3b0764,#581c87)', placeholder: 'e.g. "counting animals at a farm"',              desc: 'Educational rhymes for toddlers 2–5' },
-  { id: 'poem',          label: 'Poem',           icon: '📜', color: '#60a5fa', gradient: 'linear-gradient(135deg,#1e3a5f,#1e40af)', placeholder: 'e.g. "a poem about rain and renewal"',            desc: 'Evocative poetry with rich imagery' },
-  { id: 'short_film',   label: 'Short Film',     icon: '🎬', color: '#f87171', gradient: 'linear-gradient(135deg,#450a0a,#7f1d1d)', placeholder: 'e.g. "a stranger finds a mysterious letter"',    desc: 'Cinematic micro-narrative, 60s format' },
-  { id: 'advertisement',label: 'Advertisement',  icon: '📣', color: '#fb923c', gradient: 'linear-gradient(135deg,#431407,#7c2d12)', placeholder: 'e.g. "eco-friendly water bottle launch"',         desc: 'Hook → Solution → CTA video ad' },
-  { id: 'educational',  label: 'Educational',    icon: '🧠', color: '#34d399', gradient: 'linear-gradient(135deg,#022c22,#064e3b)', placeholder: 'e.g. "how photosynthesis works"',                desc: 'Feynman-style explainer video' },
-  { id: 'music_video',  label: 'Music Video',    icon: '🎵', color: '#f472b6', gradient: 'linear-gradient(135deg,#500724,#831843)', placeholder: 'e.g. "upbeat pop song about friendship"',        desc: 'Lyrics + cinematic visual treatment' },
-  { id: 'custom',       label: 'Custom',         icon: '✨', color: '#a78bfa', gradient: 'linear-gradient(135deg,#1e1b4b,#312e81)', placeholder: 'Describe exactly what you want to create...',    desc: 'Your creative brief, any format' },
+  { id: 'kids_rhyme',    label: 'Kids Rhyme',    icon: '🎠', color: '#c77dff', gradient: 'linear-gradient(135deg,#3b0764,#581c87)', placeholder: 'e.g. "counting animals at a farm"',           desc: 'Educational rhymes for toddlers 2–5' },
+  { id: 'poem',          label: 'Poem',           icon: '📜', color: '#60a5fa', gradient: 'linear-gradient(135deg,#1e3a5f,#1e40af)', placeholder: 'e.g. "a poem about rain and renewal"',         desc: 'Evocative poetry with rich imagery' },
+  { id: 'short_film',    label: 'Short Film',     icon: '🎬', color: '#f87171', gradient: 'linear-gradient(135deg,#450a0a,#7f1d1d)', placeholder: 'e.g. "a stranger finds a mysterious letter"', desc: 'Cinematic micro-narrative, 60s format' },
+  { id: 'advertisement', label: 'Advertisement',  icon: '📣', color: '#fb923c', gradient: 'linear-gradient(135deg,#431407,#7c2d12)', placeholder: 'e.g. "eco-friendly water bottle launch"',      desc: 'Hook → Solution → CTA video ad' },
+  { id: 'educational',   label: 'Educational',    icon: '🧠', color: '#34d399', gradient: 'linear-gradient(135deg,#022c22,#064e3b)', placeholder: 'e.g. "how photosynthesis works"',             desc: 'Feynman-style explainer video' },
+  { id: 'music_video',   label: 'Music Video',    icon: '🎵', color: '#f472b6', gradient: 'linear-gradient(135deg,#500724,#831843)', placeholder: 'e.g. "upbeat pop song about friendship"',     desc: 'Lyrics + cinematic visual treatment' },
+  { id: 'custom',        label: 'Custom',         icon: '✨', color: '#a78bfa', gradient: 'linear-gradient(135deg,#1e1b4b,#312e81)', placeholder: 'Describe exactly what you want to create...',  desc: 'Your creative brief, any format' },
 ]
 
 const CONTENT_LABEL: Record<ContentType, string> = {
@@ -58,17 +34,35 @@ const CONTENT_LABEL: Record<ContentType, string> = {
   advertisement: 'Ad Script', educational: 'Explainer Script', music_video: 'Song Lyrics', custom: 'Generated Content',
 }
 
-// ── Score Bar ─────────────────────────────────────────────────────────────────
-function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="flex items-center gap-2 mb-1.5">
-      <span className="text-[11px] text-slate-400 w-[130px] shrink-0">{label}</span>
-      <div className="flex-1 h-[5px] bg-slate-800 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${(value || 0) * 10}%`, background: color }} />
-      </div>
-      <span className="text-[11px] font-bold w-7 text-right" style={{ color }}>{(value || 0).toFixed(1)}</span>
-    </div>
-  )
+const TEMPLATES: { label: string; brief: string; type: ContentType }[] = [
+  { label: '🦆 Duck Song',         brief: 'baby ducks learning to swim at the pond',        type: 'kids_rhyme' },
+  { label: '🌅 Sunrise Poem',      brief: 'sunrise over misty mountain peaks',               type: 'poem' },
+  { label: '☕ Coffee Ad',          brief: 'premium artisan morning coffee experience',       type: 'advertisement' },
+  { label: '🧬 Science Explainer', brief: 'how DNA replication works inside a cell',         type: 'educational' },
+  { label: '🎸 Road Anthem',       brief: 'indie rock song about freedom on the open road',  type: 'music_video' },
+  { label: '🚀 Astronaut Story',   brief: 'astronaut finally returns home to family',        type: 'short_film' },
+]
+
+const CACHE_KEY = 'ai_studio_result_v2'
+const USAGE_KEY = 'ai_studio_usage'
+const FREE_LIMIT = 3
+
+function getUsageCount(): number {
+  try {
+    const raw = localStorage.getItem(USAGE_KEY)
+    if (!raw) return 0
+    const data = JSON.parse(raw) as { count: number; month: string }
+    if (data.month !== new Date().toISOString().slice(0, 7)) return 0
+    return data.count ?? 0
+  } catch { return 0 }
+}
+
+function incrementUsage(): number {
+  const count = getUsageCount() + 1
+  try {
+    localStorage.setItem(USAGE_KEY, JSON.stringify({ count, month: new Date().toISOString().slice(0, 7) }))
+  } catch { /* quota */ }
+  return count
 }
 
 // ── Copy Button ───────────────────────────────────────────────────────────────
@@ -105,10 +99,8 @@ function TypeCard({ ct, selected, onSelect, disabled }: {
       <span className="text-2xl">{ct.icon}</span>
       <span className="text-[10px] font-bold text-white leading-tight">{ct.label}</span>
       {isSelected && (
-        <div
-          className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold"
-          style={{ background: ct.color, color: '#fff' }}
-        >✓</div>
+        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold"
+          style={{ background: ct.color, color: '#fff' }}>✓</div>
       )}
     </button>
   )
@@ -150,100 +142,82 @@ function ContentTypeSelector({
   )
 }
 
-// ── Agent Card ────────────────────────────────────────────────────────────────
-function AgentCard({ stepId, status, message }: {
-  stepId: StepId; status: StepStatus; message: string
-}) {
-  const a = AGENT_CHARS[stepId]
-  const isActive = status === 'active'
-  const isDone = status === 'done'
-  const isFailed = status === 'failed'
+// ── Pipeline 3-Phase Progress ─────────────────────────────────────────────────
+function PipelineProgress({ steps, job }: { steps: Record<StepId, StepStatus>; job: VideoJob | null }) {
+  const phases = [
+    {
+      label: 'Writing', icon: '✍️',
+      done: steps.rhyme === 'done' && steps.review === 'done',
+      active: steps.rhyme === 'active' || steps.review === 'active',
+    },
+    {
+      label: 'Designing', icon: '🎨',
+      done: steps.storyboard === 'done' && steps.video === 'done' && steps.publish === 'done',
+      active: steps.storyboard === 'active' || steps.video === 'active' || steps.publish === 'active',
+    },
+    {
+      label: 'Rendering', icon: '🎬',
+      done: steps.render === 'done',
+      active: steps.render === 'active',
+    },
+  ]
+  const clipsDone = job?.clips.filter(c => c.status === 'done').length ?? 0
+  const clipsTotal = job?.clips.length ?? 0
+  const renderPct = clipsTotal > 0 ? (clipsDone / clipsTotal) * 100 : 0
 
   return (
-    <div
-      className={`relative flex flex-col items-center px-2 pt-5 pb-3 rounded-2xl border-2 transition-all duration-500 overflow-hidden ${status === 'idle' ? 'opacity-30' : ''}`}
-      style={{
-        minHeight: 280,
-        borderColor: isActive ? a.color : isDone ? '#10b981' : isFailed ? '#f59e0b' : '#1e293b',
-        background: isActive ? `${a.color}0a` : 'transparent',
-        boxShadow: isActive ? `0 0 32px ${a.color}40` : 'none',
-      }}
-    >
-      {/* Radial glow when active */}
-      {isActive && (
-        <div
-          className="absolute inset-0 pointer-events-none animate-pulse"
-          style={{ background: `radial-gradient(ellipse at 50% 20%, ${a.color}22 0%, transparent 65%)` }}
-        />
-      )}
-
-      {/* Avatar */}
-      <div className="relative mb-2.5">
-        <div
-          className="w-24 h-24 rounded-full flex items-center justify-center text-5xl transition-all duration-300"
-          style={{
-            background: status === 'idle' ? '#0f172a' : `${a.color}18`,
-            border: `2px solid ${status === 'idle' ? '#1e293b' : a.color}55`,
-            animation: isActive ? a.animation : 'none',
-          }}
-        >
-          {isDone ? '🥳' : isFailed ? '😰' : a.char}
-        </div>
-
-        {/* Action badge — shows what the agent is doing */}
-        {isActive && (
-          <div
-            className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center text-base shadow-lg"
-            style={{ background: `${a.color}22`, border: `1.5px solid ${a.color}88` }}
-          >
-            {a.action}
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">Creating your video...</div>
+      <div className="flex items-stretch gap-2 mb-4">
+        {phases.map((phase, i) => (
+          <div key={phase.label} className="flex items-center gap-2 flex-1">
+            <div className={`flex items-center gap-2 flex-1 p-3 rounded-xl border transition-all ${
+              phase.done ? 'border-emerald-700 bg-emerald-950/30' :
+              phase.active ? 'border-violet-600 bg-violet-950/30' :
+              'border-slate-700 bg-slate-900'
+            }`}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm shrink-0 ${
+                phase.done ? 'bg-emerald-600 text-white' :
+                phase.active ? 'bg-violet-600 text-white animate-pulse' :
+                'bg-slate-700 text-slate-500'
+              }`}>
+                {phase.done ? '✓' : phase.icon}
+              </div>
+              <div>
+                <div className={`text-[11px] font-bold ${
+                  phase.done ? 'text-emerald-400' :
+                  phase.active ? 'text-violet-300' :
+                  'text-slate-600'
+                }`}>{phase.label}</div>
+                <div className="text-[9px] text-slate-500">
+                  {phase.done ? 'Complete' : phase.active ? 'In progress...' : 'Waiting'}
+                </div>
+              </div>
+            </div>
+            {i < phases.length - 1 && (
+              <div className={`text-xs shrink-0 ${phase.done ? 'text-emerald-600' : 'text-slate-700'}`}>→</div>
+            )}
           </div>
-        )}
-
-        {/* Ping ring when active */}
-        {isActive && (
-          <div
-            className="absolute -inset-2 rounded-full animate-ping opacity-15 pointer-events-none"
-            style={{ border: `2px solid ${a.color}` }}
-          />
-        )}
-
-        {isDone && (
-          <div className="absolute -top-1 -right-1 text-sm leading-none">✅</div>
-        )}
+        ))}
       </div>
-
-      {/* Name + role */}
-      <div className="text-[12px] font-extrabold text-white text-center leading-tight">{a.name}</div>
-      <div className="text-[9px] text-slate-400 text-center mb-2">{a.role}</div>
-
-      {/* Status badge */}
-      <div
-        className="text-[9px] font-bold px-2.5 py-0.5 rounded-full mb-2 shrink-0"
-        style={{
-          background: `${isActive ? a.color : isDone ? '#10b981' : isFailed ? '#f59e0b' : '#334155'}22`,
-          color: isActive ? a.color : isDone ? '#34d399' : isFailed ? '#fbbf24' : '#475569',
-          border: `1px solid ${isActive ? a.color : isDone ? '#10b981' : isFailed ? '#f59e0b' : '#334155'}44`,
-        }}
-      >
-        {isActive ? '⚡ Working' : isDone ? '✓ Done' : isFailed ? '⚠ Retry' : '○ Idle'}
-      </div>
-
-      {/* Live message or tagline */}
-      <div
-        className="text-[10px] text-center leading-tight px-1"
-        style={{
-          color: isActive ? `${a.color}cc` : '#334155',
-          overflow: 'hidden',
-          display: '-webkit-box',
-          WebkitLineClamp: 4,
-          WebkitBoxOrient: 'vertical',
-        } as React.CSSProperties}
-      >
-        {isActive && message
-          ? message.replace(/Error:\s*\{[^}]*\}/, 'API busy — retrying…').replace(/^(Pipeline error|Error):\s*/i, '⚠ ')
-          : a.tagline}
-      </div>
+      {steps.render === 'active' && clipsTotal > 0 && (
+        <div>
+          <div className="flex justify-between text-[10px] text-slate-400 mb-1.5">
+            <span>Rendering clips</span>
+            <span>{clipsDone} / {clipsTotal}</span>
+          </div>
+          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-violet-600 to-pink-500 rounded-full transition-all duration-500"
+              style={{ width: `${renderPct}%` }} />
+          </div>
+        </div>
+      )}
+      {steps.render === 'active' && job?.status === 'stitching' && (
+        <div className="flex items-center gap-2 text-[11px] text-violet-300 mt-2">
+          <div className="w-3 h-3 border-2 border-violet-700 border-t-violet-300 rounded-full animate-spin" />
+          Stitching final video...
+        </div>
+      )}
     </div>
   )
 }
@@ -274,17 +248,11 @@ function VideoPreview({ storyboard, rhyme, videoScore }: {
 
   const toggleFullscreen = async () => {
     if (!containerRef.current) return
-    if (!document.fullscreenElement) {
-      await containerRef.current.requestFullscreen()
-    } else {
-      await document.exitFullscreen()
-    }
+    if (!document.fullscreenElement) await containerRef.current.requestFullscreen()
+    else await document.exitFullscreen()
   }
 
-  const lineIdx = Math.min(
-    Math.floor(shotIdx * lines.length / storyboard.shots.length),
-    lines.length - 1
-  )
+  const lineIdx = Math.min(Math.floor(shotIdx * lines.length / storyboard.shots.length), lines.length - 1)
 
   return (
     <div ref={containerRef} className="relative overflow-hidden rounded-xl select-none"
@@ -335,7 +303,7 @@ function VideoPreview({ storyboard, rhyme, videoScore }: {
 }
 
 // ── Real Video Player ─────────────────────────────────────────────────────────
-function VideoPlayer({ videoUrl, videoScore }: { videoUrl: string; videoScore: VideoScore | null }) {
+function VideoPlayer({ videoUrl }: { videoUrl: string }) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -347,44 +315,28 @@ function VideoPlayer({ videoUrl, videoScore }: { videoUrl: string; videoScore: V
 
   const toggleFullscreen = async () => {
     if (!containerRef.current) return
-    if (!document.fullscreenElement) {
-      await containerRef.current.requestFullscreen()
-    } else {
-      await document.exitFullscreen()
-    }
+    if (!document.fullscreenElement) await containerRef.current.requestFullscreen()
+    else await document.exitFullscreen()
   }
 
   return (
     <div ref={containerRef} className="relative rounded-xl overflow-hidden bg-black">
-      <video controls autoPlay loop playsInline
-        src={videoUrl}
-        className="w-full"
-        style={{ aspectRatio: '9/16', objectFit: 'cover' }}
-      />
+      <video controls autoPlay loop playsInline src={videoUrl}
+        className="w-full" style={{ aspectRatio: '9/16', objectFit: 'cover' }} />
       <button onClick={toggleFullscreen}
         className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white text-sm transition-all backdrop-blur-sm border border-white/20">
         {isFullscreen ? '✕' : '⛶'}
       </button>
-      {videoScore && (
-        <div className={`text-center py-1.5 text-xs font-bold ${videoScore.approved ? 'bg-emerald-900/40 text-emerald-400' : 'bg-amber-900/40 text-amber-400'}`}>
-          Score: {videoScore.total.toFixed(1)}/10 {videoScore.approved ? '✅' : '⚠️'}
-        </div>
-      )}
-      <div className="px-3 py-2 text-[9px] text-violet-400 font-bold text-center bg-violet-950/30">
-        ✨ AI-generated video by Kling AI
-      </div>
     </div>
   )
 }
 
-const CACHE_KEY = 'ai_studio_result_v2'
-
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function Home() {
   const [steps, setStepsState] = useState<Record<StepId, StepStatus>>({
-    rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle'
+    rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle',
   })
-  const [logs, setLogs] = useState<LogEntry[]>([{ time: '--:--:--', msg: 'AI Creative Studio ready. Select a content type and click Generate.', type: '' }])
+  const [logs, setLogs] = useState<LogEntry[]>([])
   const [rhyme, setRhyme] = useState<RhymeData | null>(null)
   const [rhymeScore, setRhymeScore] = useState<RhymeScore | null>(null)
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null)
@@ -401,12 +353,14 @@ export default function Home() {
   const [capTab, setCapTab] = useState<Platform>('youtube')
   const [showPublish, setShowPublish] = useState(false)
   const [agentMessages, setAgentMessages] = useState<Partial<Record<StepId, string>>>({})
-  const logRef = useRef<HTMLDivElement>(null)
+  const [usageCount, setUsageCount] = useState(0)
+  const [scriptExpanded, setScriptExpanded] = useState(true)
   const abortRef = useRef<AbortController | null>(null)
   const activeStepRef = useRef<StepId | null>(null)
 
-  // Load from cache on mount
+  // Load cache and usage count on mount
   useEffect(() => {
+    setUsageCount(getUsageCount())
     try {
       const saved = localStorage.getItem(CACHE_KEY)
       if (!saved) return
@@ -425,7 +379,6 @@ export default function Home() {
       if (data.publishedPlatforms?.length) setPublishedPlatforms(new Set(data.publishedPlatforms as Platform[]))
       setComplete(true)
       setStepsState({ rhyme: 'done', review: 'done', storyboard: 'done', video: 'done', vreview: 'done', render: data.job?.finalVideoUrl ? 'done' : 'idle', publish: 'done' })
-      setLogs([{ time: '--:--:--', msg: `Loaded previous result from cache (${data.cachedAt ?? 'earlier'})`, type: 'info' }])
     } catch { /* corrupt cache — ignore */ }
   }, [])
 
@@ -436,17 +389,12 @@ export default function Home() {
       const ts = new Date().toLocaleString()
       localStorage.setItem(CACHE_KEY, JSON.stringify({
         rhyme, rhymeScore, storyboard, videoMeta, videoScore, job, captions,
-        contentType, userBrief,
-        publishedPlatforms: Array.from(publishedPlatforms), cachedAt: ts,
+        contentType, userBrief, publishedPlatforms: Array.from(publishedPlatforms), cachedAt: ts,
       }))
       setCachedAt(ts)
-    } catch { /* storage quota exceeded */ }
+    } catch { /* quota */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complete])
-
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
-  }, [logs])
 
   const addLog = useCallback((msg: string, type: LogEntry['type'] = '') => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false })
@@ -472,7 +420,7 @@ export default function Home() {
     setLogs([])
     setRhyme(null); setRhymeScore(null); setStoryboard(null)
     setVideoScore(null); setCaptions(null); setVideoMeta(null); setJob(null)
-    setComplete(false); setShowPublish(false)
+    setComplete(false); setShowPublish(false); setScriptExpanded(true)
     setAgentMessages({})
     activeStepRef.current = null
   }, [])
@@ -497,7 +445,7 @@ export default function Home() {
 
   const renderVideo = useCallback(async (initialJob: VideoJob, signal: AbortSignal) => {
     setStep('render', 'active')
-    addLog(`Rendering ${initialJob.clips.length} video clips (~${initialJob.targetDurationSec}s total)...`, 'agent')
+    addLog(`Rendering ${initialJob.clips.length} clips (~${initialJob.targetDurationSec}s total)...`, 'agent')
 
     let currentJob = initialJob
     for (let i = 0; i < currentJob.clips.length; i++) {
@@ -512,7 +460,7 @@ export default function Home() {
       addLog(`Clip ${i + 1}/${currentJob.clips.length} ready ✓`, 'success')
     }
 
-    addLog('Stitching clips into the final video...', 'agent')
+    addLog('Stitching clips into final video...', 'agent')
     let data: { job?: VideoJob; error?: string } = {}
     let res: Response | undefined
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -533,14 +481,13 @@ export default function Home() {
     }
     setJob(data.job)
     setStep('render', 'done')
-    addLog('Final video ready ✓', 'success')
+    addLog('🎉 Pipeline complete! Final video ready.', 'success')
   }, [renderClip, addLog, setStep])
 
   const startPipeline = useCallback(async () => {
     if (running) return
     reset()
     setRunning(true)
-
     abortRef.current = new AbortController()
     let createdJob: VideoJob | null = null
     try {
@@ -562,7 +509,6 @@ export default function Home() {
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n\n')
         buffer = lines.pop() || ''
-
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           try {
@@ -570,57 +516,31 @@ export default function Home() {
             switch (chunk.type) {
               case 'log':
                 setLogs(prev => [...prev, { time: chunk.payload.time, msg: chunk.payload.msg, type: chunk.payload.type }])
-                {
-                  const stepId = activeStepRef.current
-                  if (stepId) setAgentMessages(prev => ({ ...prev, [stepId]: chunk.payload.msg as string }))
-                }
+                { const stepId = activeStepRef.current; if (stepId) setAgentMessages(prev => ({ ...prev, [stepId]: chunk.payload.msg as string })) }
                 break
-              case 'step':
-                setStep(chunk.payload.id as StepId, chunk.payload.status as StepStatus)
-                break
-              case 'rhyme':
-                setRhyme(chunk.payload as RhymeData)
-                break
-              case 'rhyme_score':
-                setRhymeScore(chunk.payload as RhymeScore)
-                break
-              case 'storyboard':
-                setStoryboard(chunk.payload as Storyboard)
-                break
-              case 'video_meta':
-                setVideoMeta(chunk.payload as VideoMeta)
-                break
-              case 'video_score':
-                setVideoScore(chunk.payload as VideoScore)
-                break
-              case 'job':
-                createdJob = chunk.payload as VideoJob
-                setJob(createdJob)
-                break
-              case 'captions':
-                setCaptions(chunk.payload as SocialCaptions)
-                break
-              case 'complete':
-                setComplete(true)
-                break
-              case 'error':
-                addLog(`Error: ${(chunk.payload as { message: string }).message}`, 'error')
-                break
+              case 'step':   setStep(chunk.payload.id as StepId, chunk.payload.status as StepStatus); break
+              case 'rhyme':  setRhyme(chunk.payload as RhymeData); break
+              case 'rhyme_score': setRhymeScore(chunk.payload as RhymeScore); break
+              case 'storyboard': setStoryboard(chunk.payload as Storyboard); break
+              case 'video_meta': setVideoMeta(chunk.payload as VideoMeta); break
+              case 'video_score': setVideoScore(chunk.payload as VideoScore); break
+              case 'job':    createdJob = chunk.payload as VideoJob; setJob(createdJob); break
+              case 'captions': setCaptions(chunk.payload as SocialCaptions); break
+              case 'complete': setComplete(true); break
+              case 'error':  addLog(`Error: ${(chunk.payload as { message: string }).message}`, 'error'); break
             }
           } catch { /* skip malformed */ }
         }
       }
-
-      if (createdJob) {
-        await renderVideo(createdJob, abortRef.current.signal)
-      }
+      if (createdJob) await renderVideo(createdJob, abortRef.current.signal)
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         addLog(`Connection error: ${(err as Error).message}`, 'error')
-        addLog('Make sure GOOGLE_API_KEY is set in your .env.local file', 'warning')
+        addLog('Make sure GOOGLE_API_KEY is set in your environment', 'warning')
       }
     } finally {
       setRunning(false)
+      setUsageCount(incrementUsage())
     }
   }, [running, reset, setStep, addLog, renderVideo, contentType, userBrief])
 
@@ -644,10 +564,10 @@ export default function Home() {
     setCachedAt(null)
     setPublishedPlatforms(new Set())
     setStepsState({ rhyme: 'idle', review: 'idle', storyboard: 'idle', video: 'idle', vreview: 'idle', render: 'idle', publish: 'idle' })
-    setLogs([{ time: new Date().toLocaleTimeString('en-US', { hour12: false }), msg: 'Published content cleared. Ready for new video.', type: 'success' }])
+    setLogs([])
     setRhyme(null); setRhymeScore(null); setStoryboard(null)
     setVideoScore(null); setCaptions(null); setVideoMeta(null); setJob(null)
-    setComplete(false); setShowPublish(false)
+    setComplete(false); setShowPublish(false); setScriptExpanded(true)
   }, [])
 
   const getCapText = (platform: Platform) => {
@@ -656,34 +576,34 @@ export default function Home() {
     return `${c.title}\n\n${c.caption}\n\n${c.cta}\n\n${c.hashtags.map(h => '#' + h.replace('#', '')).join(' ')}`
   }
 
-  const finalScore = videoScore?.total ?? 0
-  const isReady = finalScore > 8
   const selectedTypeMeta = CONTENT_TYPES.find(t => t.id === contentType)!
   const contentLabel = CONTENT_LABEL[contentType]
+  const videosLeft = Math.max(0, FREE_LIMIT - usageCount)
+  const isOverLimit = usageCount >= FREE_LIMIT
+  // suppress unused-variable lint for agentMessages (kept for cache compat)
+  void agentMessages; void cachedAt; void logs
 
   return (
     <div className="min-h-screen bg-[#0a0815] text-white" style={{ fontFamily: "'Nunito', sans-serif" }}>
       <style suppressHydrationWarning>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap');`}</style>
 
       {/* Header */}
-      <div className="border-b border-slate-800 px-6 py-4">
+      <div className="border-b border-slate-800 px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold" style={{ fontFamily: "'Fredoka One', cursive", background: 'linear-gradient(135deg,#ff6b9d,#c77dff,#4cc9f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <h1 className="text-xl font-bold" style={{ fontFamily: "'Fredoka One', cursive", background: 'linear-gradient(135deg,#ff6b9d,#c77dff,#4cc9f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               ✨ AI Creative Studio
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">7 AI agents · Any video format · Gemini AI + Kling AI · SSE streaming</p>
+            <p className="text-[10px] text-slate-500">Turn any idea into a short video in 90 seconds</p>
           </div>
-          <div className="flex items-center gap-2">
-            {cachedAt && !running && (
-              <div className="flex items-center gap-1.5 bg-violet-950/60 border border-violet-700 rounded-full px-3 py-1.5">
-                <span className="text-[10px] text-violet-300">💾 Cached · {cachedAt}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-full px-4 py-2">
+          <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-bold ${isOverLimit ? 'border-amber-600 bg-amber-950/40 text-amber-300' : 'border-slate-700 bg-slate-900 text-slate-400'}`}>
+              {isOverLimit ? '⚠️ Free limit reached' : `🎬 ${videosLeft} free video${videosLeft !== 1 ? 's' : ''} left`}
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-full px-4 py-1.5">
               <div className={`w-2 h-2 rounded-full ${running ? 'bg-emerald-400 animate-pulse' : complete ? 'bg-violet-400' : 'bg-slate-600'}`} />
-              <span className="text-xs font-bold text-slate-300">
-                {running ? `Creating ${selectedTypeMeta.label}...` : complete ? (isReady ? '🎉 Ready to Post' : '✅ Complete') : 'Ready'}
+              <span className="text-[11px] font-bold text-slate-300">
+                {running ? 'Creating...' : complete ? '✅ Ready' : 'Ready'}
               </span>
             </div>
           </div>
@@ -693,10 +613,9 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className="grid grid-cols-[1fr_300px] gap-6">
 
-          {/* LEFT */}
+          {/* ── LEFT ── */}
           <div className="flex flex-col gap-5">
 
-            {/* Content Type Selector */}
             <ContentTypeSelector
               selected={contentType}
               onSelect={setContentType}
@@ -705,164 +624,56 @@ export default function Home() {
               disabled={running}
             />
 
-            {/* Agent Pipeline — visual character stage */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                  AI Agent Crew
-                  {complete && <span className="ml-2 text-emerald-500">— {selectedTypeMeta.icon} {selectedTypeMeta.label} complete</span>}
+            {/* Quick-start templates */}
+            {!running && !complete && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Quick Start Templates</div>
+                <div className="flex flex-wrap gap-2">
+                  {TEMPLATES.map(t => (
+                    <button
+                      key={t.label}
+                      onClick={() => { setContentType(t.type); setUserBrief(t.brief) }}
+                      className="px-3 py-1.5 rounded-full text-[11px] font-bold border border-slate-700 bg-slate-800 text-slate-300 hover:border-violet-500 hover:text-violet-300 hover:bg-violet-950/30 transition-all"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
                 </div>
-                {running && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-                    <span className="text-[9px] text-violet-400 font-bold">Pipeline active</span>
-                  </div>
-                )}
               </div>
-              <div className="flex items-stretch gap-1">
-                {STEPS.map((s, i) => (
-                  <Fragment key={s.id}>
-                    <div className="flex-1 min-w-0">
-                      <AgentCard
-                        stepId={s.id}
-                        status={steps[s.id]}
-                        message={agentMessages[s.id] ?? ''}
-                      />
+            )}
+
+            {/* 3-phase progress while running */}
+            {running && <PipelineProgress steps={steps} job={job} />}
+
+            {/* Generated script */}
+            {rhyme && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                <button
+                  onClick={() => setScriptExpanded(e => !e)}
+                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-800/50 transition-colors"
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    {selectedTypeMeta.icon} {contentLabel} · {rhyme.topic}
+                  </div>
+                  <span className="text-slate-500 text-xs">{scriptExpanded ? '▲' : '▼'}</span>
+                </button>
+                {scriptExpanded && (
+                  <div className="px-5 pb-4">
+                    <div className="bg-slate-800 border border-violet-800/40 rounded-xl p-4 text-sm leading-loose whitespace-pre-wrap text-slate-100">
+                      {rhyme.rhyme}
                     </div>
-                    {i < STEPS.length - 1 && (
-                      <div className="flex items-center self-stretch shrink-0 px-0.5 pt-2">
-                        <div
-                          className="text-xs transition-all duration-500"
-                          style={{
-                            color: steps[STEPS[i + 1].id] === 'active' ? AGENT_CHARS[STEPS[i + 1].id].color :
-                                   steps[s.id] === 'done' ? '#10b981' : '#1e293b',
-                            textShadow: steps[STEPS[i + 1].id] === 'active'
-                              ? `0 0 8px ${AGENT_CHARS[STEPS[i + 1].id].color}`
-                              : 'none',
-                          }}
-                        >→</div>
+                    {rhymeScore && (
+                      <div className={`mt-3 px-3 py-2 rounded-xl text-[11px] font-bold inline-flex items-center gap-2 ${rhymeScore.approved ? 'bg-emerald-950/40 border border-emerald-700 text-emerald-300' : 'bg-amber-950/40 border border-amber-700 text-amber-300'}`}>
+                        {rhymeScore.approved ? '✅' : '⚠️'} Quality: {rhymeScore.total.toFixed(1)}/10
+                        {!rhymeScore.approved && rhymeScore.feedback[0] && ` — ${rhymeScore.feedback[0]}`}
                       </div>
                     )}
-                  </Fragment>
-                ))}
-              </div>
-            </div>
-
-            {/* Generated Content */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">{contentLabel}</div>
-              {rhyme ? (
-                <>
-                  <div className="text-[10px] font-bold text-violet-400 uppercase tracking-wider mb-2">
-                    {selectedTypeMeta.icon} {rhyme.topic} · {rhyme.learningConcept} · v{rhyme.version}
-                  </div>
-                  <div className="bg-slate-800 border border-violet-800/40 rounded-xl p-4 text-sm leading-loose whitespace-pre-wrap text-slate-100">
-                    {rhyme.rhyme}
-                  </div>
-                </>
-              ) : (
-                <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm text-slate-500 italic min-h-[80px] flex items-center">
-                  {selectedTypeMeta.icon} {contentLabel.toLowerCase()} will appear here after generation...
-                </div>
-              )}
-
-              {rhymeScore && (
-                <div className="mt-4">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Content Quality Review</div>
-                  <ScoreBar label="Entertainment (25%)" value={rhymeScore.entertainment} color="#c77dff" />
-                  <ScoreBar label="Quality (25%)" value={rhymeScore.educational} color="#4cc9f0" />
-                  <ScoreBar label="Originality (20%)" value={rhymeScore.ageAppropriate} color="#56cfb2" />
-                  <ScoreBar label="Rhythm (10%)" value={rhymeScore.rhythm} color="#ff9f43" />
-                  <ScoreBar label="Clarity (10%)" value={rhymeScore.simplicity} color="#ff6b9d" />
-                  <ScoreBar label="Impact (10%)" value={rhymeScore.positiveMessage} color="#5bea8b" />
-                  <div className={`mt-3 p-3 rounded-xl text-sm font-bold ${rhymeScore.approved ? 'bg-emerald-950/50 border border-emerald-700 text-emerald-300' : 'bg-amber-950/50 border border-amber-700 text-amber-300'}`}>
-                    Total: {rhymeScore.total.toFixed(1)}/10 — {rhymeScore.approved ? '✅ APPROVED' : '⚠️ Needs Refinement'}
-                  </div>
-                  {!rhymeScore.approved && rhymeScore.feedback.length > 0 && (
-                    <div className="mt-2 text-[11px] text-amber-400">Feedback: {rhymeScore.feedback.join(' · ')}</div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Storyboard */}
-            {storyboard && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">
-                  {contentLabel} Storyboard — {storyboard.shots.length} Shots
-                </div>
-                <div className="grid grid-cols-4 gap-3">
-                  {storyboard.shots.slice(0, 4).map((shot, i) => (
-                    <div key={i} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-                      <div className="h-20 flex items-center justify-center text-3xl" style={{ background: shot.bg || 'linear-gradient(135deg,#1a0a2e,#2d1b4e)' }}>
-                        {shot.emoji}
-                      </div>
-                      <div className="p-2.5">
-                        <div className="text-[9px] font-bold text-cyan-400 mb-1">SHOT {i + 1} · {shot.timestamp}</div>
-                        <div className="text-[10px] text-slate-300 leading-tight">{shot.description}</div>
-                        <div className="text-[9px] text-slate-500 mt-1.5 italic">📷 {shot.camera}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {storyboard.shots.length > 4 && (
-                  <div className="mt-2 text-[10px] text-slate-500 text-center">
-                    +{storyboard.shots.length - 4} more shots · {storyboard.shots.length} total
                   </div>
                 )}
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  {[
-                    { l: 'Music', v: storyboard.musicStyle },
-                    { l: 'Mood', v: storyboard.mood },
-                    { l: 'Voice', v: storyboard.voiceStyle },
-                  ].map(m => (
-                    <div key={m.l} className="bg-slate-800 rounded-xl p-2.5 text-center">
-                      <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-1">{m.l}</div>
-                      <div className="text-[11px] font-bold text-cyan-300">{m.v}</div>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 
-            {/* Video Production Package */}
-            {videoMeta && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Video Production Package</div>
-                <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-3">
-                  <div className="text-[10px] font-bold text-violet-400 uppercase tracking-wider mb-2">AI Video Generation Prompt</div>
-                  <p className="text-[12px] text-slate-300 leading-relaxed">{videoMeta.videoPrompt}</p>
-                  <CopyButton text={videoMeta.videoPrompt} label="Copy prompt" />
-                </div>
-                <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-                  <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-2">Narration Script</div>
-                  <p className="text-[12px] text-slate-300 leading-relaxed whitespace-pre-wrap">{videoMeta.audioScript}</p>
-                  <CopyButton text={videoMeta.audioScript} label="Copy script" />
-                </div>
-                <div className="mt-3 p-3 bg-violet-950/40 border border-violet-800 rounded-xl text-[11px] text-violet-300">
-                  🎬 <strong>Kling AI:</strong> Each scene is generated as a real AI video via fal.ai. Set <code className="bg-slate-800 px-1 rounded">FAL_KEY</code> in <code className="bg-slate-800 px-1 rounded">.env.local</code> to enable.
-                </div>
-              </div>
-            )}
-
-            {/* Video Review */}
-            {videoScore && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Video Quality Review</div>
-                <ScoreBar label="Video Quality (20%)" value={videoScore.videoQuality} color="#c77dff" />
-                <ScoreBar label="Audio Quality (15%)" value={videoScore.audioQuality} color="#4cc9f0" />
-                <ScoreBar label="Audio Sync (20%)" value={videoScore.audioSync} color="#ff6b9d" />
-                <ScoreBar label="Lip Sync (15%)" value={videoScore.lipSync} color="#56cfb2" />
-                <ScoreBar label="Character Mood (15%)" value={videoScore.characterMood} color="#ff9f43" />
-                <ScoreBar label="Scene Consistency (10%)" value={videoScore.sceneConsistency} color="#5bea8b" />
-                <ScoreBar label="Engagement (5%)" value={videoScore.engagement} color="#f8c537" />
-                <div className={`mt-3 p-3 rounded-xl text-sm font-bold ${videoScore.approved ? 'bg-emerald-950/50 border border-emerald-700 text-emerald-300' : 'bg-amber-950/50 border border-amber-700 text-amber-300'}`}>
-                  Video Score: {videoScore.total.toFixed(1)}/10 — {videoScore.approved ? '✅ APPROVED' : '⚠️ Re-rendering...'}
-                </div>
-              </div>
-            )}
-
-            {/* Captions */}
+            {/* Platform captions */}
             {captions && (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Platform Captions</div>
@@ -901,23 +712,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Ready Banner */}
-            {complete && (
-              <div className={`rounded-2xl p-5 border flex items-center gap-4 ${isReady ? 'bg-emerald-950/40 border-emerald-600' : 'bg-slate-800 border-slate-600'}`}>
-                <div className="text-4xl">{isReady ? '🎉' : '✅'}</div>
-                <div>
-                  <div className="font-bold text-lg" style={{ fontFamily: "'Fredoka One', cursive", color: isReady ? '#5bea8b' : '#a78bfa' }}>
-                    {isReady ? `Your ${selectedTypeMeta.label} Video is Ready!` : 'Video Production Complete'}
-                  </div>
-                  <div className="text-sm text-slate-400 mt-1">
-                    Video: {finalScore.toFixed(1)}/10 · All 7 agents complete ·{' '}
-                    {isReady ? 'Copy captions + upload your video to go live' : 'Copy captions to publish'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Social Posting */}
+            {/* Social publish panel */}
             {complete && showPublish && captions && (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">Post to Social Media</div>
@@ -958,7 +753,7 @@ export default function Home() {
                       <div className="text-sm font-bold text-emerald-300">
                         {publishedPlatforms.size === 4 ? '🎉 Published to all platforms!' : `✅ Published to ${publishedPlatforms.size} platform${publishedPlatforms.size > 1 ? 's' : ''}`}
                       </div>
-                      <div className="text-[11px] text-emerald-500 mt-0.5">Clear this video from storage to make room for the next one.</div>
+                      <div className="text-[11px] text-emerald-500 mt-0.5">Clear this video to make room for your next one.</div>
                     </div>
                     <button onClick={clearAfterPublish}
                       className="shrink-0 px-4 py-2 rounded-xl text-[11px] font-bold bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600 transition-all">
@@ -970,15 +765,15 @@ export default function Home() {
             )}
           </div>
 
-          {/* RIGHT */}
+          {/* ── RIGHT (sticky) ── */}
           <div className="flex flex-col gap-4 sticky top-6">
 
-            {/* Video Package */}
+            {/* Video player / preview */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Video Package</div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Your Video</div>
               <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
                 {job?.finalVideoUrl ? (
-                  <VideoPlayer videoUrl={job.finalVideoUrl} videoScore={videoScore} />
+                  <VideoPlayer videoUrl={job.finalVideoUrl} />
                 ) : job ? (
                   <div className="relative" style={{ aspectRatio: '9/16' }}>
                     {storyboard && rhyme && (
@@ -989,16 +784,14 @@ export default function Home() {
                       {(() => {
                         const done = job.clips.filter(c => c.status === 'done').length
                         const total = job.clips.length
-                        const label = job.status === 'stitching'
-                          ? 'Stitching final video...'
-                          : `Rendering clip ${Math.min(done + 1, total)} / ${total}`
+                        const label = job.status === 'stitching' ? 'Stitching final video...' : `Rendering clip ${Math.min(done + 1, total)} / ${total}`
                         return (
                           <>
                             <span className="text-[12px] font-bold text-white">{label}</span>
                             <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
                               <div className="h-full bg-violet-500 transition-all duration-500" style={{ width: `${(done / total) * 100}%` }} />
                             </div>
-                            <span className="text-[10px] text-slate-400">~{job.targetDurationSec}s final video · {job.clipDurationSec}s per clip</span>
+                            <span className="text-[10px] text-slate-400">~{job.targetDurationSec}s final video</span>
                           </>
                         )
                       })()}
@@ -1007,11 +800,11 @@ export default function Home() {
                 ) : storyboard && rhyme ? (
                   <VideoPreview storyboard={storyboard} rhyme={rhyme} videoScore={videoScore} />
                 ) : (
-                  <div className="h-36 flex flex-col items-center justify-center gap-2">
+                  <div className="h-52 flex flex-col items-center justify-center gap-2">
                     {running ? (
                       <>
                         <div className="w-5 h-5 border-2 border-slate-700 border-t-violet-400 rounded-full animate-spin" />
-                        <span className="text-[11px] text-slate-400">Building package...</span>
+                        <span className="text-[11px] text-slate-400">Generating...</span>
                       </>
                     ) : (
                       <>
@@ -1022,29 +815,52 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              {/* Download */}
+              {job?.finalVideoUrl && (
+                <a href={job.finalVideoUrl} download="ai-studio-video.mp4" target="_blank" rel="noopener noreferrer"
+                  className="mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-bold text-sm bg-emerald-700 hover:bg-emerald-600 text-white transition-all">
+                  ⬇ Download Video
+                </a>
+              )}
+
+              {complete && (
+                <div className="mt-3 text-center text-[11px] text-emerald-400 font-bold">
+                  🎉 Pipeline complete! Ready to post.
+                </div>
+              )}
             </div>
 
-            {/* Log */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Live Agent Activity</div>
-              <div ref={logRef} className="bg-slate-950 rounded-xl p-3 h-52 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700">
-                {logs.map((l, i) => (
-                  <div key={i} className="flex gap-2">
-                    <span className="text-[9px] text-slate-600 font-mono shrink-0 mt-0.5 w-14">{l.time}</span>
-                    <span className={`text-[11px] leading-tight ${
-                      l.type === 'success' ? 'text-emerald-400' :
-                      l.type === 'warning' ? 'text-amber-400' :
-                      l.type === 'error' ? 'text-red-400' :
-                      l.type === 'info' ? 'text-cyan-400' :
-                      l.type === 'agent' ? 'text-violet-300 font-bold' :
-                      'text-slate-400'
-                    }`}>{l.msg}</span>
-                  </div>
-                ))}
+            {/* Upgrade CTA — shows after 2 videos used */}
+            {usageCount >= 2 && (
+              <div className="bg-gradient-to-br from-violet-950 to-slate-900 border border-violet-700 rounded-2xl p-4">
+                <div className="text-[11px] font-bold text-violet-300 mb-1">
+                  {isOverLimit ? '🔒 Free limit reached' : '⚡ Almost out of free videos'}
+                </div>
+                <div className="text-[10px] text-slate-400 mb-3">
+                  {isOverLimit
+                    ? 'Upgrade to Creator for unlimited AI videos.'
+                    : `You've used ${usageCount} of ${FREE_LIMIT} free videos this month.`}
+                </div>
+                <div className="flex flex-col gap-1.5 mb-3">
+                  {['Unlimited AI image videos', 'No watermarks', '20 Kling AI videos/month'].map(f => (
+                    <div key={f} className="flex items-center gap-2 text-[10px] text-slate-300">
+                      <span className="text-emerald-400">✓</span> {f}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button className="flex-1 py-2 rounded-xl text-[11px] font-bold bg-violet-600 hover:bg-violet-500 text-white transition-all">
+                    Creator — $19.99/mo
+                  </button>
+                  <button className="px-3 py-2 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all">
+                    See plans
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Buttons */}
+            {/* Action buttons */}
             <div className="flex flex-col gap-2">
               <button
                 onClick={startPipeline}
@@ -1053,9 +869,9 @@ export default function Home() {
                 style={{ background: running ? '#1e1a35' : 'linear-gradient(135deg,#ff6b9d,#c77dff)', color: '#fff', border: running ? '1px solid #3d3560' : 'none' }}
               >
                 {running ? (
-                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Pipeline Running...</>
+                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Creating...</>
                 ) : (
-                  <><span>{selectedTypeMeta.icon}</span>{cachedAt ? `🔄 Regenerate ${selectedTypeMeta.label}` : complete ? `New ${selectedTypeMeta.label}` : `Generate ${selectedTypeMeta.label}`}</>
+                  <><span>{selectedTypeMeta.icon}</span>{complete ? '🔄 Create Another' : `✨ Generate ${selectedTypeMeta.label}`}</>
                 )}
               </button>
 
