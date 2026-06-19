@@ -17,17 +17,31 @@ function safeJSON<T>(text: string): T {
 }
 
 async function callGemini(system: string, user: string, maxOutputTokens = 4096): Promise<string> {
-  const response = await genai.models.generateContent({
-    model: 'gemini-2.5-flash-lite',
-    contents: [{ role: 'user', parts: [{ text: user }] }],
-    config: {
-      systemInstruction: system,
-      maxOutputTokens,
-      responseMimeType: 'application/json',
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  })
-  return response.text ?? ''
+  const MAX_RETRIES = 4
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await genai.models.generateContent({
+        model: 'gemini-2.5-flash-lite',
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        config: {
+          systemInstruction: system,
+          maxOutputTokens,
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      })
+      return response.text ?? ''
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isTransient = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand') || msg.includes('overloaded')
+      if (isTransient && attempt < MAX_RETRIES - 1) {
+        await new Promise(r => setTimeout(r, 4000 * (attempt + 1)))
+        continue
+      }
+      throw err
+    }
+  }
+  return ''
 }
 
 // ── Long-form video config ────────────────────────────────────────────────
