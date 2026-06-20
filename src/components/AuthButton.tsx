@@ -41,7 +41,7 @@ export default function AuthButton() {
 
   if (!email) {
     return (
-      <a href="/signin" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-violet-600 bg-violet-950/40 text-violet-300 text-[11px] font-bold hover:bg-violet-900/40 transition-all">
+      <a href="/signin" className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-accent-500 text-white text-[12px] font-semibold hover:bg-accent-600 transition-colors">
         Sign in
       </a>
     )
@@ -49,12 +49,12 @@ export default function AuthButton() {
 
   return (
     <div className="flex items-center gap-2">
-      <a href="/account" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-[11px] font-bold text-slate-300 hover:border-violet-500 transition-colors">
-        <span className="text-emerald-400">●</span>
+      <a href="/account" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-ink-500 bg-ink-700 text-[12px] font-medium text-ink-200 hover:border-accent-500 hover:text-ink-50 transition-colors">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         <span className="max-w-[140px] truncate">{email}</span>
-        <span className="text-violet-400">· {PLAN_LABEL[plan] ?? plan}</span>
+        <span className="text-accent-400 font-semibold">· {PLAN_LABEL[plan] ?? plan}</span>
       </a>
-      <button onClick={signOut} className="text-[11px] font-bold text-slate-500 hover:text-slate-300 transition-colors">
+      <button onClick={signOut} className="text-[12px] font-medium text-ink-300 hover:text-ink-50 transition-colors">
         Sign out
       </button>
     </div>

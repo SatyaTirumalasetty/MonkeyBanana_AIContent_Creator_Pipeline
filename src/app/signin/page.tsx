@@ -2,6 +2,7 @@
 import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Logo from '@/components/Logo'
 
 function SignInContent() {
   const params = useSearchParams()
@@ -29,37 +30,38 @@ function SignInContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0815] text-white flex items-center justify-center px-6" style={{ fontFamily: "'Nunito', sans-serif" }}>
-      <style suppressHydrationWarning>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap');`}</style>
+    <div className="min-h-screen bg-ink text-ink-50 flex items-center justify-center px-6 py-12">
       <div className="max-w-sm w-full">
-        <a href="/" className="block text-center text-xl font-bold mb-8" style={{ fontFamily: "'Fredoka One', cursive", background: 'linear-gradient(135deg,#ff6b9d,#c77dff,#4cc9f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          ✨ AI Creative Studio
-        </a>
+        <div className="flex justify-center mb-8">
+          <Logo />
+        </div>
 
         {status === 'sent' ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center">
-            <div className="text-4xl mb-3">📬</div>
-            <h1 className="text-lg font-bold mb-2">Check your email</h1>
-            <p className="text-slate-400 text-sm">We sent a sign-in link to <span className="text-slate-200">{email}</span>. Click it to continue.</p>
+          <div className="bg-ink-700 border border-ink-500 rounded-2xl p-7 text-center">
+            <div className="w-12 h-12 rounded-full bg-accent-soft/10 border border-accent-500/30 flex items-center justify-center mx-auto mb-4 text-xl">
+              ✉️
+            </div>
+            <h1 className="font-display text-lg font-bold mb-2">Check your email</h1>
+            <p className="text-ink-200 text-sm leading-relaxed">We sent a sign-in link to <span className="text-ink-50 font-medium">{email}</span>. Click it to continue.</p>
           </div>
         ) : (
-          <form onSubmit={sendMagicLink} className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-            <h1 className="text-lg font-bold mb-1">Sign in</h1>
-            <p className="text-slate-400 text-sm mb-5">We&apos;ll email you a magic link — no password needed.</p>
+          <form onSubmit={sendMagicLink} className="bg-ink-700 border border-ink-500 rounded-2xl p-7">
+            <h1 className="font-display text-lg font-bold mb-1.5">Sign in</h1>
+            <p className="text-ink-200 text-sm mb-6">We&apos;ll email you a magic link — no password needed.</p>
+            <label className="block text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-1.5">Email address</label>
             <input
               type="email"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-500 outline-none focus:border-violet-500 transition-colors mb-3"
+              className="w-full px-4 py-3 rounded-xl bg-ink-600 border border-ink-500 text-sm text-ink-50 placeholder-ink-300 outline-none focus:border-accent-500 transition-colors mb-4"
             />
-            {error && <div className="text-rose-400 text-xs mb-3">{error}</div>}
+            {error && <div className="text-rose-400 text-xs mb-4">{error}</div>}
             <button
               type="submit"
               disabled={status === 'sending'}
-              className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(135deg,#ff6b9d,#c77dff)' }}
+              className="w-full py-3 rounded-xl font-semibold text-sm text-white bg-accent-500 hover:bg-accent-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {status === 'sending' ? (
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending...</>
@@ -68,7 +70,7 @@ function SignInContent() {
           </form>
         )}
 
-        <a href="/" className="block text-center text-slate-500 hover:text-slate-300 text-sm mt-6 transition-colors">
+        <a href="/" className="block text-center text-ink-300 hover:text-ink-50 text-sm mt-6 transition-colors">
           ← Back to Studio
         </a>
       </div>
@@ -78,7 +80,7 @@ function SignInContent() {
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0815]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-ink" />}>
       <SignInContent />
     </Suspense>
   )

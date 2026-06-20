@@ -7,14 +7,15 @@
 body {
   margin: 0;
   padding: 0;
-  background: #0a0815;
-  color: white;
-  font-family: 'Nunito', sans-serif;
+  background: #08090C;
+  color: #F5F6FA;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .scrollbar-thin::-webkit-scrollbar { width: 4px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.scrollbar-thumb-slate-700::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.scrollbar-thumb-slate-700::-webkit-scrollbar-thumb { background: #34374A; border-radius: 2px; }
 
 /* Agent character action animations — each reflects the agent's real-world action */
 @keyframes agent-write {

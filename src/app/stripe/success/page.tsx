@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import Logo from '@/components/Logo'
 
 function SuccessContent() {
   const params = useSearchParams()
@@ -9,38 +10,39 @@ function SuccessContent() {
   const [status, setStatus] = useState<'loading' | 'done'>('loading')
 
   useEffect(() => {
-    // Small delay to let webhook process
     const t = setTimeout(() => setStatus('done'), 2000)
     return () => clearTimeout(t)
   }, [sessionId])
 
   return (
-    <div className="min-h-screen bg-[#0a0815] text-white flex items-center justify-center px-6" style={{ fontFamily: "'Nunito', sans-serif" }}>
-      <style suppressHydrationWarning>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Fredoka+One&display=swap');`}</style>
+    <div className="min-h-screen bg-ink text-ink-50 flex items-center justify-center px-6 py-12">
       <div className="max-w-md w-full text-center">
+        <div className="flex justify-center mb-10">
+          <Logo />
+        </div>
         {status === 'loading' ? (
           <>
-            <div className="w-12 h-12 border-4 border-violet-800 border-t-violet-400 rounded-full animate-spin mx-auto mb-6" />
-            <h1 className="text-2xl font-bold text-white mb-2">Activating your plan...</h1>
-            <p className="text-slate-400 text-sm">Confirming payment with Stripe</p>
+            <div className="w-10 h-10 border-[3px] border-ink-400 border-t-accent-400 rounded-full animate-spin mx-auto mb-6" />
+            <h1 className="font-display text-xl font-bold mb-2">Activating your plan...</h1>
+            <p className="text-ink-300 text-sm">Confirming payment with Stripe</p>
           </>
         ) : (
           <>
-            <div className="text-7xl mb-6">🎉</div>
-            <h1 className="text-3xl font-bold mb-3" style={{ fontFamily: "'Fredoka One', cursive", background: 'linear-gradient(135deg,#ff6b9d,#c77dff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Welcome to AI Creative Studio!
-            </h1>
-            <p className="text-slate-300 text-sm mb-8 leading-relaxed">
-              Your subscription is active. Sign in with Google to unlock your plan — use the same email you checked out with.
+            <div className="w-16 h-16 rounded-full mx-auto mb-6 flex items-center justify-center text-2xl"
+              style={{ background: 'linear-gradient(135deg,#6D5DFC,#22D3EE)' }}>
+              ✓
+            </div>
+            <h1 className="font-display text-2xl font-bold mb-3">Welcome to AI Creative Studio!</h1>
+            <p className="text-ink-200 text-sm mb-8 leading-relaxed">
+              Your subscription is active. Sign in with the same email you checked out with to unlock your plan.
             </p>
             <div className="flex flex-col gap-3">
               <a href="/"
-                className="w-full py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all"
-                style={{ background: 'linear-gradient(135deg,#ff6b9d,#c77dff)' }}>
-                ✨ Start Creating
+                className="w-full py-3 rounded-xl font-semibold text-sm text-white bg-accent-500 hover:bg-accent-600 transition-colors">
+                Start Creating
               </a>
-              <a href="/pricing"
-                className="w-full py-3 rounded-xl font-bold text-sm text-slate-300 border border-slate-700 hover:border-violet-500 transition-all">
+              <a href="/account"
+                className="w-full py-3 rounded-xl font-semibold text-sm text-ink-200 border border-ink-500 hover:border-accent-500 hover:text-ink-50 transition-colors">
                 View your plan
               </a>
             </div>
@@ -53,7 +55,7 @@ function SuccessContent() {
 
 export default function SuccessPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0815]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-ink" />}>
       <SuccessContent />
     </Suspense>
   )

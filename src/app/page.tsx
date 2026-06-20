@@ -5,6 +5,7 @@ import type {
   SocialCaptions, VideoMeta, VideoJob, Platform, ContentType,
 } from '@/types'
 import AuthButton from '@/components/AuthButton'
+import Logo from '@/components/Logo'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type StepStatus = 'idle' | 'active' | 'done' | 'failed'
@@ -21,13 +22,13 @@ const CONTENT_TYPES: {
   id: ContentType; label: string; icon: string; color: string
   gradient: string; placeholder: string; desc: string
 }[] = [
-  { id: 'kids_rhyme',    label: 'Kids Rhyme',    icon: '🎠', color: '#c77dff', gradient: 'linear-gradient(135deg,#3b0764,#581c87)', placeholder: 'e.g. "counting animals at a farm"',           desc: 'Educational rhymes for toddlers 2–5' },
+  { id: 'kids_rhyme',    label: 'Kids Rhyme',    icon: '🎠', color: '#8676FF', gradient: 'linear-gradient(135deg,#3b0764,#581c87)', placeholder: 'e.g. "counting animals at a farm"',           desc: 'Educational rhymes for toddlers 2–5' },
   { id: 'poem',          label: 'Poem',           icon: '📜', color: '#60a5fa', gradient: 'linear-gradient(135deg,#1e3a5f,#1e40af)', placeholder: 'e.g. "a poem about rain and renewal"',         desc: 'Evocative poetry with rich imagery' },
   { id: 'short_film',    label: 'Short Film',     icon: '🎬', color: '#f87171', gradient: 'linear-gradient(135deg,#450a0a,#7f1d1d)', placeholder: 'e.g. "a stranger finds a mysterious letter"', desc: 'Cinematic micro-narrative, 60s format' },
   { id: 'advertisement', label: 'Advertisement',  icon: '📣', color: '#fb923c', gradient: 'linear-gradient(135deg,#431407,#7c2d12)', placeholder: 'e.g. "eco-friendly water bottle launch"',      desc: 'Hook → Solution → CTA video ad' },
   { id: 'educational',   label: 'Educational',    icon: '🧠', color: '#34d399', gradient: 'linear-gradient(135deg,#022c22,#064e3b)', placeholder: 'e.g. "how photosynthesis works"',             desc: 'Feynman-style explainer video' },
   { id: 'music_video',   label: 'Music Video',    icon: '🎵', color: '#f472b6', gradient: 'linear-gradient(135deg,#500724,#831843)', placeholder: 'e.g. "upbeat pop song about friendship"',     desc: 'Lyrics + cinematic visual treatment' },
-  { id: 'custom',        label: 'Custom',         icon: '✨', color: '#a78bfa', gradient: 'linear-gradient(135deg,#1e1b4b,#312e81)', placeholder: 'Describe exactly what you want to create...',  desc: 'Your creative brief, any format' },
+  { id: 'custom',        label: 'Custom',         icon: '✨', color: '#22D3EE', gradient: 'linear-gradient(135deg,#1e1b4b,#312e81)', placeholder: 'Describe exactly what you want to create...',  desc: 'Your creative brief, any format' },
 ]
 
 const CONTENT_LABEL: Record<ContentType, string> = {
@@ -75,7 +76,7 @@ function CopyButton({ text, label = 'Copy caption' }: { text: string; label?: st
     setTimeout(() => setCopied(false), 2000)
   }
   return (
-    <button onClick={copy} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${copied ? 'bg-emerald-900/30 border-emerald-600 text-emerald-400' : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-violet-500 hover:text-violet-300'}`}>
+    <button onClick={copy} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${copied ? 'bg-emerald-500/10 border-emerald-600 text-emerald-400' : 'bg-ink-600 border-ink-500 text-ink-200 hover:border-accent-500 hover:text-accent-400'}`}>
       {copied ? '✓ Copied!' : `📋 ${label}`}
     </button>
   )
@@ -90,18 +91,17 @@ function TypeCard({ ct, selected, onSelect, disabled }: {
     <button
       onClick={() => !disabled && onSelect(ct.id)}
       disabled={disabled}
-      className="relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center disabled:pointer-events-none"
+      className="relative flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center disabled:pointer-events-none"
       style={{
-        background: isSelected ? ct.gradient : 'transparent',
-        borderColor: isSelected ? ct.color : '#1e293b',
-        boxShadow: isSelected ? `0 0 20px ${ct.color}30` : 'none',
+        background: isSelected ? `${ct.color}14` : 'transparent',
+        borderColor: isSelected ? ct.color : '#23252F',
       }}
     >
       <span className="text-2xl">{ct.icon}</span>
-      <span className="text-[10px] font-bold text-white leading-tight">{ct.label}</span>
+      <span className="text-[10px] font-semibold text-ink-50 leading-tight">{ct.label}</span>
       {isSelected && (
-        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold"
-          style={{ background: ct.color, color: '#fff' }}>✓</div>
+        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+          style={{ background: ct.color }}>✓</div>
       )}
     </button>
   )
@@ -116,19 +116,14 @@ function ContentTypeSelector({
 }) {
   const meta = CONTENT_TYPES.find(t => t.id === selected)!
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">What do you want to create?</div>
-      <div className="grid grid-cols-4 gap-2 mb-2">
-        {CONTENT_TYPES.slice(0, 4).map(ct => (
+    <div className="bg-ink-700 border border-ink-500 rounded-2xl p-4 sm:p-5">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-4">What do you want to create?</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        {CONTENT_TYPES.map(ct => (
           <TypeCard key={ct.id} ct={ct} selected={selected} onSelect={onSelect} disabled={disabled} />
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {CONTENT_TYPES.slice(4).map(ct => (
-          <TypeCard key={ct.id} ct={ct} selected={selected} onSelect={onSelect} disabled={disabled} />
-        ))}
-      </div>
-      <div className="text-[11px] text-slate-400 mb-2">{meta.desc}</div>
+      <div className="text-[12px] text-ink-200 mb-2">{meta.desc}</div>
       <textarea
         value={brief}
         onChange={e => onBriefChange(e.target.value)}
@@ -136,9 +131,9 @@ function ContentTypeSelector({
         maxLength={500}
         rows={2}
         disabled={disabled}
-        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-[12px] text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-violet-500 transition-colors disabled:opacity-40"
+        className="w-full bg-ink-600 border border-ink-500 rounded-xl px-3 py-2 text-[13px] text-ink-100 placeholder-ink-300 resize-none focus:outline-none focus:border-accent-500 transition-colors disabled:opacity-40"
       />
-      <div className="text-[9px] text-slate-600 mt-1">Optional — leave blank for AI to decide · {brief.length}/500</div>
+      <div className="text-[10px] text-ink-400 mt-1">Optional — leave blank for AI to decide · {brief.length}/500</div>
     </div>
   )
 }
@@ -167,55 +162,55 @@ function PipelineProgress({ steps, job }: { steps: Record<StepId, StepStatus>; j
   const renderPct = clipsTotal > 0 ? (clipsDone / clipsTotal) * 100 : 0
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">Creating your video...</div>
-      <div className="flex items-stretch gap-2 mb-4">
+    <div className="bg-ink-700 border border-ink-500 rounded-2xl p-4 sm:p-5">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-4">Creating your video...</div>
+      <div className="flex flex-col sm:flex-row items-stretch gap-2 mb-4">
         {phases.map((phase, i) => (
           <div key={phase.label} className="flex items-center gap-2 flex-1">
             <div className={`flex items-center gap-2 flex-1 p-3 rounded-xl border transition-all ${
-              phase.done ? 'border-emerald-700 bg-emerald-950/30' :
-              phase.active ? 'border-violet-600 bg-violet-950/30' :
-              'border-slate-700 bg-slate-900'
+              phase.done ? 'border-emerald-700 bg-emerald-500/10' :
+              phase.active ? 'border-accent-500 bg-accent-500/10' :
+              'border-ink-500 bg-ink-700'
             }`}>
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm shrink-0 ${
                 phase.done ? 'bg-emerald-600 text-white' :
-                phase.active ? 'bg-violet-600 text-white animate-pulse' :
-                'bg-slate-700 text-slate-500'
+                phase.active ? 'bg-accent-500 text-white animate-pulse' :
+                'bg-ink-500 text-ink-300'
               }`}>
                 {phase.done ? '✓' : phase.icon}
               </div>
               <div>
-                <div className={`text-[11px] font-bold ${
+                <div className={`text-[11px] font-semibold ${
                   phase.done ? 'text-emerald-400' :
-                  phase.active ? 'text-violet-300' :
-                  'text-slate-600'
+                  phase.active ? 'text-accent-400' :
+                  'text-ink-400'
                 }`}>{phase.label}</div>
-                <div className="text-[9px] text-slate-500">
+                <div className="text-[9px] text-ink-300">
                   {phase.done ? 'Complete' : phase.active ? 'In progress...' : 'Waiting'}
                 </div>
               </div>
             </div>
             {i < phases.length - 1 && (
-              <div className={`text-xs shrink-0 ${phase.done ? 'text-emerald-600' : 'text-slate-700'}`}>→</div>
+              <div className={`hidden sm:block text-xs shrink-0 ${phase.done ? 'text-emerald-600' : 'text-ink-500'}`}>→</div>
             )}
           </div>
         ))}
       </div>
       {steps.render === 'active' && clipsTotal > 0 && (
         <div>
-          <div className="flex justify-between text-[10px] text-slate-400 mb-1.5">
+          <div className="flex justify-between text-[10px] text-ink-300 mb-1.5">
             <span>Rendering clips</span>
             <span>{clipsDone} / {clipsTotal}</span>
           </div>
-          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-violet-600 to-pink-500 rounded-full transition-all duration-500"
-              style={{ width: `${renderPct}%` }} />
+          <div className="h-2 bg-ink-600 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${renderPct}%`, background: 'linear-gradient(90deg,#6D5DFC,#22D3EE)' }} />
           </div>
         </div>
       )}
       {steps.render === 'active' && job?.status === 'stitching' && (
-        <div className="flex items-center gap-2 text-[11px] text-violet-300 mt-2">
-          <div className="w-3 h-3 border-2 border-violet-700 border-t-violet-300 rounded-full animate-spin" />
+        <div className="flex items-center gap-2 text-[11px] text-accent-400 mt-2">
+          <div className="w-3 h-3 border-2 border-accent-700 border-t-accent-400 rounded-full animate-spin" />
           Stitching final video...
         </div>
       )}
@@ -266,7 +261,7 @@ function VideoPreview({ storyboard, rhyme, videoScore }: {
         <div className="bg-black/50 backdrop-blur-sm rounded-lg px-2 py-0.5 text-[9px] font-bold text-white/80">
           SHOT {shotIdx + 1} / {storyboard.shots.length} · {shot.timestamp}
         </div>
-        <div className="bg-violet-900/70 backdrop-blur-sm rounded-lg px-2 py-0.5 text-[9px] font-bold text-violet-200">
+        <div className="bg-accent-700/70 backdrop-blur-sm rounded-lg px-2 py-0.5 text-[9px] font-bold text-accent-50">
           📷 {shot.camera?.split(',')[0]}
         </div>
       </div>
@@ -585,25 +580,18 @@ export default function Home() {
   void agentMessages; void cachedAt; void logs
 
   return (
-    <div className="min-h-screen bg-[#0a0815] text-white" style={{ fontFamily: "'Nunito', sans-serif" }}>
-      <style suppressHydrationWarning>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap');`}</style>
-
+    <div className="min-h-screen bg-ink text-ink-50">
       {/* Header */}
-      <div className="border-b border-slate-800 px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold" style={{ fontFamily: "'Fredoka One', cursive", background: 'linear-gradient(135deg,#ff6b9d,#c77dff,#4cc9f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              ✨ AI Creative Studio
-            </h1>
-            <p className="text-[10px] text-slate-500">Turn any idea into a short video in 90 seconds</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-bold ${isOverLimit ? 'border-amber-600 bg-amber-950/40 text-amber-300' : 'border-slate-700 bg-slate-900 text-slate-400'}`}>
+      <div className="border-b border-ink-500 px-4 sm:px-6 py-3">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <Logo subtitle="Turn any idea into a short video in 90 seconds" />
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${isOverLimit ? 'border-amber-600 bg-amber-500/10 text-amber-300' : 'border-ink-500 bg-ink-700 text-ink-200'}`}>
               {isOverLimit ? '⚠️ Free limit reached' : `🎬 ${videosLeft} free video${videosLeft !== 1 ? 's' : ''} left`}
             </div>
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-full px-4 py-1.5">
-              <div className={`w-2 h-2 rounded-full ${running ? 'bg-emerald-400 animate-pulse' : complete ? 'bg-violet-400' : 'bg-slate-600'}`} />
-              <span className="text-[11px] font-bold text-slate-300">
+            <div className="flex items-center gap-2 bg-ink-700 border border-ink-500 rounded-full px-4 py-1.5">
+              <div className={`w-2 h-2 rounded-full ${running ? 'bg-emerald-400 animate-pulse' : complete ? 'bg-accent-400' : 'bg-ink-400'}`} />
+              <span className="text-[11px] font-semibold text-ink-200">
                 {running ? 'Creating...' : complete ? '✅ Ready' : 'Ready'}
               </span>
             </div>
@@ -612,11 +600,11 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-[1fr_300px] gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
 
           {/* ── LEFT ── */}
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-5 min-w-0">
 
             <ContentTypeSelector
               selected={contentType}
@@ -628,14 +616,14 @@ export default function Home() {
 
             {/* Quick-start templates */}
             {!running && !complete && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Quick Start Templates</div>
+              <div className="bg-ink-700 border border-ink-500 rounded-2xl p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-3">Quick Start Templates</div>
                 <div className="flex flex-wrap gap-2">
                   {TEMPLATES.map(t => (
                     <button
                       key={t.label}
                       onClick={() => { setContentType(t.type); setUserBrief(t.brief) }}
-                      className="px-3 py-1.5 rounded-full text-[11px] font-bold border border-slate-700 bg-slate-800 text-slate-300 hover:border-violet-500 hover:text-violet-300 hover:bg-violet-950/30 transition-all"
+                      className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-ink-500 bg-ink-600 text-ink-200 hover:border-accent-500 hover:text-accent-400 transition-colors"
                     >
                       {t.label}
                     </button>
@@ -649,23 +637,23 @@ export default function Home() {
 
             {/* Generated script */}
             {rhyme && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+              <div className="bg-ink-700 border border-ink-500 rounded-2xl overflow-hidden">
                 <button
                   onClick={() => setScriptExpanded(e => !e)}
-                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-800/50 transition-colors"
+                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-ink-600/50 transition-colors"
                 >
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300">
                     {selectedTypeMeta.icon} {contentLabel} · {rhyme.topic}
                   </div>
-                  <span className="text-slate-500 text-xs">{scriptExpanded ? '▲' : '▼'}</span>
+                  <span className="text-ink-300 text-xs">{scriptExpanded ? '▲' : '▼'}</span>
                 </button>
                 {scriptExpanded && (
                   <div className="px-5 pb-4">
-                    <div className="bg-slate-800 border border-violet-800/40 rounded-xl p-4 text-sm leading-loose whitespace-pre-wrap text-slate-100">
+                    <div className="bg-ink-600 border border-accent-700/40 rounded-xl p-4 text-sm leading-loose whitespace-pre-wrap text-ink-100">
                       {rhyme.rhyme}
                     </div>
                     {rhymeScore && (
-                      <div className={`mt-3 px-3 py-2 rounded-xl text-[11px] font-bold inline-flex items-center gap-2 ${rhymeScore.approved ? 'bg-emerald-950/40 border border-emerald-700 text-emerald-300' : 'bg-amber-950/40 border border-amber-700 text-amber-300'}`}>
+                      <div className={`mt-3 px-3 py-2 rounded-xl text-[11px] font-semibold inline-flex items-center gap-2 ${rhymeScore.approved ? 'bg-emerald-500/10 border border-emerald-700 text-emerald-300' : 'bg-amber-500/10 border border-amber-700 text-amber-300'}`}>
                         {rhymeScore.approved ? '✅' : '⚠️'} Quality: {rhymeScore.total.toFixed(1)}/10
                         {!rhymeScore.approved && rhymeScore.feedback[0] && ` — ${rhymeScore.feedback[0]}`}
                       </div>
@@ -677,12 +665,12 @@ export default function Home() {
 
             {/* Platform captions */}
             {captions && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Platform Captions</div>
-                <div className="flex gap-2 mb-4">
+              <div className="bg-ink-700 border border-ink-500 rounded-2xl p-5">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-3">Platform Captions</div>
+                <div className="flex gap-2 mb-4 flex-wrap">
                   {(['youtube', 'instagram', 'facebook', 'tiktok'] as Platform[]).map(p => (
                     <button key={p} onClick={() => setCapTab(p)}
-                      className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${capTab === p ? 'bg-violet-900/50 border-violet-500 text-violet-300' : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${capTab === p ? 'bg-accent-500/15 border-accent-500 text-accent-400' : 'border-ink-500 text-ink-300 hover:border-ink-400'}`}>
                       {PLATFORM_META[p].icon} {PLATFORM_META[p].name}
                     </button>
                   ))}
@@ -691,20 +679,20 @@ export default function Home() {
                   const c = captions[capTab]
                   const pm = PLATFORM_META[capTab]
                   return (
-                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-                      <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: pm.color }}>{c.creator}</div>
-                      <div className="font-bold text-sm mb-2 text-white">{c.title}</div>
-                      <div className="text-[12px] text-slate-300 leading-relaxed mb-3">{c.caption}</div>
-                      <div className="bg-amber-950/40 border border-amber-800 rounded-lg p-2.5 text-[11px] text-amber-300 font-bold mb-3">📣 {c.cta}</div>
+                    <div className="bg-ink-600 border border-ink-500 rounded-xl p-4">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: pm.color }}>{c.creator}</div>
+                      <div className="font-semibold text-sm mb-2 text-ink-50">{c.title}</div>
+                      <div className="text-[12px] text-ink-200 leading-relaxed mb-3">{c.caption}</div>
+                      <div className="bg-amber-500/10 border border-amber-800 rounded-lg p-2.5 text-[11px] text-amber-300 font-semibold mb-3">📣 {c.cta}</div>
                       <div className="flex flex-wrap gap-1.5 mb-3">
                         {c.hashtags.map(h => (
-                          <span key={h} className="text-[10px] bg-slate-700 text-cyan-300 rounded px-2 py-0.5">#{h.replace('#', '')}</span>
+                          <span key={h} className="text-[10px] bg-ink-500 text-teal rounded px-2 py-0.5">#{h.replace('#', '')}</span>
                         ))}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <CopyButton text={getCapText(capTab)} />
                         <button onClick={() => handleUpload(capTab, pm.url)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-700 border border-slate-600 text-slate-200 hover:border-violet-500 hover:text-violet-300 transition-all">
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-ink-500 border border-ink-400 text-ink-100 hover:border-accent-500 hover:text-accent-400 transition-colors">
                           ↗ Open {pm.name}
                         </button>
                       </div>
@@ -716,10 +704,10 @@ export default function Home() {
 
             {/* Social publish panel */}
             {complete && showPublish && captions && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">Post to Social Media</div>
-                <div className="bg-amber-950/40 border border-amber-800 rounded-xl p-3 text-[11px] text-amber-300 mb-4">
-                  <strong>Workflow:</strong> 1) Copy the caption → 2) Click "Upload" to open the platform → 3) Paste caption + upload your video file
+              <div className="bg-ink-700 border border-ink-500 rounded-2xl p-5">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-4">Post to Social Media</div>
+                <div className="bg-amber-500/10 border border-amber-800 rounded-xl p-3 text-[11px] text-amber-300 mb-4">
+                  <strong>Workflow:</strong> 1) Copy the caption → 2) Click &quot;Upload&quot; to open the platform → 3) Paste caption + upload your video file
                 </div>
                 <div className="flex flex-col gap-3">
                   {(['youtube', 'instagram', 'facebook', 'tiktok'] as Platform[]).map(pid => {
@@ -728,20 +716,20 @@ export default function Home() {
                     const txt = getCapText(pid)
                     const published = publishedPlatforms.has(pid)
                     return (
-                      <div key={pid} className={`border rounded-xl p-4 flex items-center gap-4 transition-all ${published ? 'bg-emerald-950/30 border-emerald-700' : 'bg-slate-800 border-slate-700'}`}>
+                      <div key={pid} className={`border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 transition-all ${published ? 'bg-emerald-500/10 border-emerald-700' : 'bg-ink-600 border-ink-500'}`}>
                         <div className="text-2xl">{published ? '✅' : pm.icon}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-sm text-white flex items-center gap-2">
+                          <div className="font-semibold text-sm text-ink-50 flex items-center gap-2 flex-wrap">
                             {pm.name}
-                            {published && <span className="text-[9px] font-bold bg-emerald-900/60 text-emerald-400 border border-emerald-700 rounded-full px-2 py-0.5">PUBLISHED</span>}
+                            {published && <span className="text-[9px] font-semibold bg-emerald-900/60 text-emerald-400 border border-emerald-700 rounded-full px-2 py-0.5">PUBLISHED</span>}
                           </div>
-                          <div className="text-[10px] text-slate-400">{pm.desc}</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5 truncate">{c.title}</div>
+                          <div className="text-[10px] text-ink-300">{pm.desc}</div>
+                          <div className="text-[10px] text-ink-400 mt-0.5 truncate">{c.title}</div>
                         </div>
                         <div className="flex gap-2 shrink-0">
                           <CopyButton text={txt} label="Copy" />
                           <button onClick={() => handleUpload(pid, pm.url)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${published ? 'bg-emerald-900/40 border-emerald-700 text-emerald-300' : 'bg-violet-900/50 border-violet-600 text-violet-200 hover:bg-violet-900'}`}>
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${published ? 'bg-emerald-900/40 border-emerald-700 text-emerald-300' : 'bg-accent-500/15 border-accent-500 text-accent-400 hover:bg-accent-500/25'}`}>
                             {published ? '↗ Re-upload' : '↗ Upload'}
                           </button>
                         </div>
@@ -750,15 +738,15 @@ export default function Home() {
                   })}
                 </div>
                 {publishedPlatforms.size > 0 && (
-                  <div className="mt-4 p-4 bg-emerald-950/40 border border-emerald-700 rounded-xl flex items-center justify-between gap-4">
+                  <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <div className="text-sm font-bold text-emerald-300">
+                      <div className="text-sm font-semibold text-emerald-300">
                         {publishedPlatforms.size === 4 ? '🎉 Published to all platforms!' : `✅ Published to ${publishedPlatforms.size} platform${publishedPlatforms.size > 1 ? 's' : ''}`}
                       </div>
                       <div className="text-[11px] text-emerald-500 mt-0.5">Clear this video to make room for your next one.</div>
                     </div>
                     <button onClick={clearAfterPublish}
-                      className="shrink-0 px-4 py-2 rounded-xl text-[11px] font-bold bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600 transition-all">
+                      className="shrink-0 px-4 py-2 rounded-xl text-[11px] font-semibold bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600 transition-colors">
                       🗑 Clear & New Video
                     </button>
                   </div>
@@ -767,13 +755,13 @@ export default function Home() {
             )}
           </div>
 
-          {/* ── RIGHT (sticky) ── */}
-          <div className="flex flex-col gap-4 sticky top-6">
+          {/* ── RIGHT (sticky on desktop) ── */}
+          <div className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
 
             {/* Video player / preview */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Your Video</div>
-              <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+            <div className="bg-ink-700 border border-ink-500 rounded-2xl p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-3">Your Video</div>
+              <div className="bg-ink-600 border border-ink-500 rounded-xl overflow-hidden">
                 {job?.finalVideoUrl ? (
                   <VideoPlayer videoUrl={job.finalVideoUrl} />
                 ) : job ? (
@@ -782,18 +770,18 @@ export default function Home() {
                       <VideoPreview storyboard={storyboard} rhyme={rhyme} videoScore={videoScore} />
                     )}
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 px-4 text-center">
-                      <div className="w-6 h-6 border-2 border-slate-700 border-t-violet-400 rounded-full animate-spin" />
+                      <div className="w-6 h-6 border-2 border-ink-400 border-t-accent-400 rounded-full animate-spin" />
                       {(() => {
                         const done = job.clips.filter(c => c.status === 'done').length
                         const total = job.clips.length
                         const label = job.status === 'stitching' ? 'Stitching final video...' : `Rendering clip ${Math.min(done + 1, total)} / ${total}`
                         return (
                           <>
-                            <span className="text-[12px] font-bold text-white">{label}</span>
-                            <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                              <div className="h-full bg-violet-500 transition-all duration-500" style={{ width: `${(done / total) * 100}%` }} />
+                            <span className="text-[12px] font-semibold text-white">{label}</span>
+                            <div className="w-full h-1.5 bg-ink-500 rounded-full overflow-hidden">
+                              <div className="h-full bg-accent-500 transition-all duration-500" style={{ width: `${(done / total) * 100}%` }} />
                             </div>
-                            <span className="text-[10px] text-slate-400">~{job.targetDurationSec}s final video</span>
+                            <span className="text-[10px] text-ink-300">~{job.targetDurationSec}s final video</span>
                           </>
                         )
                       })()}
@@ -805,13 +793,13 @@ export default function Home() {
                   <div className="h-52 flex flex-col items-center justify-center gap-2">
                     {running ? (
                       <>
-                        <div className="w-5 h-5 border-2 border-slate-700 border-t-violet-400 rounded-full animate-spin" />
-                        <span className="text-[11px] text-slate-400">Generating...</span>
+                        <div className="w-5 h-5 border-2 border-ink-400 border-t-accent-400 rounded-full animate-spin" />
+                        <span className="text-[11px] text-ink-300">Generating...</span>
                       </>
                     ) : (
                       <>
                         <div className="text-3xl">{selectedTypeMeta.icon}</div>
-                        <span className="text-[11px] text-slate-500">Video appears here</span>
+                        <span className="text-[11px] text-ink-300">Video appears here</span>
                       </>
                     )}
                   </div>
@@ -821,13 +809,13 @@ export default function Home() {
               {/* Download */}
               {job?.finalVideoUrl && (
                 <a href={job.finalVideoUrl} download="ai-studio-video.mp4" target="_blank" rel="noopener noreferrer"
-                  className="mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-bold text-sm bg-emerald-700 hover:bg-emerald-600 text-white transition-all">
+                  className="mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-semibold text-sm bg-emerald-700 hover:bg-emerald-600 text-white transition-colors">
                   ⬇ Download Video
                 </a>
               )}
 
               {complete && (
-                <div className="mt-3 text-center text-[11px] text-emerald-400 font-bold">
+                <div className="mt-3 text-center text-[11px] text-emerald-400 font-semibold">
                   🎉 Pipeline complete! Ready to post.
                 </div>
               )}
@@ -835,29 +823,29 @@ export default function Home() {
 
             {/* Upgrade CTA — shows after 2 videos used */}
             {usageCount >= 2 && (
-              <div className="bg-gradient-to-br from-violet-950 to-slate-900 border border-violet-700 rounded-2xl p-4">
-                <div className="text-[11px] font-bold text-violet-300 mb-1">
+              <div className="bg-ink-700 border border-accent-700/50 rounded-2xl p-4">
+                <div className="text-[11px] font-semibold text-accent-400 mb-1">
                   {isOverLimit ? '🔒 Free limit reached' : '⚡ Almost out of free videos'}
                 </div>
-                <div className="text-[10px] text-slate-400 mb-3">
+                <div className="text-[10px] text-ink-300 mb-3">
                   {isOverLimit
                     ? 'Upgrade to Creator for unlimited AI videos.'
                     : `You've used ${usageCount} of ${FREE_LIMIT} free videos this month.`}
                 </div>
                 <div className="flex flex-col gap-1.5 mb-3">
                   {['Unlimited AI image videos', 'No watermarks', '20 Kling AI videos/month'].map(f => (
-                    <div key={f} className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <div key={f} className="flex items-center gap-2 text-[10px] text-ink-200">
                       <span className="text-emerald-400">✓</span> {f}
                     </div>
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <button className="flex-1 py-2 rounded-xl text-[11px] font-bold bg-violet-600 hover:bg-violet-500 text-white transition-all">
+                  <a href="/pricing" className="flex-1 py-2 rounded-xl text-[11px] font-semibold bg-accent-500 hover:bg-accent-600 text-white text-center transition-colors">
                     Creator — $19.99/mo
-                  </button>
-                  <button className="px-3 py-2 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all">
+                  </a>
+                  <a href="/pricing" className="px-3 py-2 rounded-xl text-[11px] font-semibold bg-ink-600 hover:bg-ink-500 text-ink-200 border border-ink-500 transition-colors">
                     See plans
-                  </button>
+                  </a>
                 </div>
               </div>
             )}
@@ -867,8 +855,8 @@ export default function Home() {
               <button
                 onClick={startPipeline}
                 disabled={running}
-                className="w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: running ? '#1e1a35' : 'linear-gradient(135deg,#ff6b9d,#c77dff)', color: '#fff', border: running ? '1px solid #3d3560' : 'none' }}
+                className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: running ? '#181923' : 'linear-gradient(135deg,#6D5DFC,#22D3EE)', color: '#fff', border: running ? '1px solid #34374A' : 'none' }}
               >
                 {running ? (
                   <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Creating...</>
@@ -880,8 +868,7 @@ export default function Home() {
               {complete && (
                 <button
                   onClick={() => setShowPublish(p => !p)}
-                  className="w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all"
-                  style={{ background: 'linear-gradient(135deg,#f8c537,#ff9f43)', color: '#1a1000' }}
+                  className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-ink-900 transition-colors"
                 >
                   <span>📲</span>{showPublish ? 'Hide Publishing' : 'Post to Social Media'}
                 </button>
