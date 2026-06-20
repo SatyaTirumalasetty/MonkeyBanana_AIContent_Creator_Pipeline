@@ -4,6 +4,7 @@ import type {
   LogEntry, RhymeData, RhymeScore, Storyboard, VideoScore,
   SocialCaptions, VideoMeta, VideoJob, Platform, ContentType,
 } from '@/types'
+import AuthButton from '@/components/AuthButton'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type StepStatus = 'idle' | 'active' | 'done' | 'failed'
@@ -606,6 +607,7 @@ export default function Home() {
                 {running ? 'Creating...' : complete ? '✅ Ready' : 'Ready'}
               </span>
             </div>
+            <AuthButton />
           </div>
         </div>
       </div>
