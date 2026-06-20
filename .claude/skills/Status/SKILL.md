@@ -28,24 +28,24 @@ description: Session entry point for AI Creative Studio (kids-studio) — answer
 
 All four cross-reference each other and should already reflect current reality as of their own "last updated" content — this file is a layer above them: the narrative of *what just happened* and *what's next*, not a duplicate of their detailed backlogs.
 
-## Current state (as of 2026-06-20)
+## Current state (as of 2026-06-21)
 
-**In production right now**: commit `19073dc` — confirmed `READY` on Vercel and live-verified.
+**In production right now**: commit `4a90db7` — confirmed `READY` on Vercel and live-verified. **No P0s remain open.**
 
 **What's live and working**:
 - Server-side usage enforcement + job ownership (`cbac24a`) — verified end-to-end live, including a same-day production outage in `reserve_usage()` that was caught and fixed at the DB layer (see `/PO` Resolved).
 - `safeJSON` brace-matching fixed to be string-aware (`6849c80`) — verified, zero recurrences in an 8-call live sample.
 - Markdown (`**label**`) now renders as bold everywhere it's displayed: the script panel (`8174845`) and the storyboard caption overlay (`19073dc`) — both DOM-verified live via Playwright against production.
 - All 7 content types now generate successfully (`70f0d1d`) — `generateVideoMetadata`'s `maxOutputTokens` raised from the 4096 default to 16384, fixing a 100% failure rate on `educational`/`short_film`/`custom`. Re-verified live post-deploy: 6/6 across the 3 previously-broken types, with `video_meta`/`job`/`complete` events and a populated `lipSyncMap` confirmed present, not just absence of error.
+- `/privacy` and `/terms` pages added and linked from the homepage and pricing footers (`4a90db7`) — Stripe live-mode activation's blocking requirement is cleared. Content reflects real third-party data flows (Stripe, Supabase, Vercel, Google Gemini, fal.ai); placeholder contact emails (`privacy@`/`support@aicreativestudio.app`) still need swapping for real ones, and a legal review is recommended before relying on this for compliance in a specific jurisdiction.
 
-**What's broken right now, in priority order** (full detail in `/PO`):
-1. **P0 — no privacy policy / terms of service page.** Blocks Stripe live-mode activation. Not started. **This is the single highest-priority open item.**
-2. **P1 — quota not refunded on failed generation.** Defense-in-depth gap; now rarer since the two dominant failure causes (`safeJSON`, `maxOutputTokens`) are both fixed, but still a real gap for whatever failures remain. Not started.
-3. **P1 — no video history/gallery UI.** Data layer supports it (`owner_key` scoping exists); no UI. Not started.
-4. Various P2 polish items — see `/PO`.
+**What's open right now, in priority order** (full detail in `/PO`):
+1. **P1 — quota not refunded on failed generation.** Defense-in-depth gap; now rarer since the two dominant failure causes (`safeJSON`, `maxOutputTokens`) are both fixed, but still a real gap for whatever failures remain. Not started. **This is now the highest-priority open item.**
+2. **P1 — no video history/gallery UI.** Data layer supports it (`owner_key` scoping exists); no UI. Not started.
+3. Various P2 polish items — see `/PO`.
 
 ## Last session
 
-**2026-06-20**: Built server-side usage enforcement + job ownership from scratch (`cbac24a`), caught and fixed a same-day production outage in the new DB function (`/Architect`'s health check), hardened that function against unnecessary PUBLIC exposure, then ran three rounds of `/QA` testing that together found and fixed four real production bugs: `safeJSON` truncation (`6849c80`), markdown rendering in the script panel (`8174845`) and then the storyboard caption overlay (`19073dc`), and a 100%-failure-rate token-truncation bug in `generateVideoMetadata` affecting 3 of 7 content types (`70f0d1d`) — every fix was verified live against production (not just typechecked/built), several requiring Playwright browser-level DOM checks since they were client-side-only. Created the `/PO`, `/QA`, `/UX`, `/Architect`, and this `/Status` skill over the course of the session. All known bugs from this session are now resolved.
+**2026-06-20 to 2026-06-21**: Built server-side usage enforcement + job ownership from scratch (`cbac24a`), caught and fixed a same-day production outage in the new DB function (`/Architect`'s health check), hardened that function against unnecessary PUBLIC exposure, then ran several rounds of `/QA` testing that together found and fixed five real bugs: `safeJSON` truncation (`6849c80`), markdown rendering in the script panel (`8174845`) and then the storyboard caption overlay (`19073dc`), a 100%-failure-rate token-truncation bug in `generateVideoMetadata` affecting 3 of 7 content types (`70f0d1d`), and finally added the missing privacy/ToS pages (`4a90db7`) closing out the last open P0. Every fix was verified live against production (not just typechecked/built), several requiring Playwright browser-level checks since they were client-side-only or behind a client-rendering bailout. Created the `/PO`, `/QA`, `/UX`, `/Architect`, and this `/Status` skill over the course of the session. The backlog is now down to two P1s and some P2 polish.
 
-**Next action, if no other instruction is given**: the privacy/ToS page (P0 #1 above) — it's the only P0 left, and it's a small, well-scoped piece of work (two static pages + footer links) blocking Stripe live-mode activation.
+**Next action, if no other instruction is given**: the quota-not-refunded-on-failure defense-in-depth fix (P1 #1 above) — make `checkAndReserveUsage` only reserve a slot after generation succeeds, or refund on failure.
