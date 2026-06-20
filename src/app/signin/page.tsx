@@ -1,8 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function SignInPage() {
+function SignInContent() {
+  const params = useSearchParams()
+  const next = params.get('next') ?? '/'
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [error, setError] = useState('')
@@ -15,7 +18,7 @@ export default function SignInPage() {
       const supabase = createClient()
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
+        options: { emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(next)}` },
       })
       if (error) throw error
       setStatus('sent')
@@ -70,5 +73,13 @@ export default function SignInPage() {
         </a>
       </div>
     </div>
+  )
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0815]" />}>
+      <SignInContent />
+    </Suspense>
   )
 }

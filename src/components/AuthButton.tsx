@@ -49,11 +49,11 @@ export default function AuthButton() {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-[11px] font-bold text-slate-300">
+      <a href="/account" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-[11px] font-bold text-slate-300 hover:border-violet-500 transition-colors">
         <span className="text-emerald-400">●</span>
         <span className="max-w-[140px] truncate">{email}</span>
         <span className="text-violet-400">· {PLAN_LABEL[plan] ?? plan}</span>
-      </div>
+      </a>
       <button onClick={signOut} className="text-[11px] font-bold text-slate-500 hover:text-slate-300 transition-colors">
         Sign out
       </button>
