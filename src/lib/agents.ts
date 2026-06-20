@@ -63,6 +63,13 @@ async function callGemini(system: string, user: string, maxOutputTokens = 4096):
   return ''
 }
 
+// Studio/Cinema "brand brief memory" — a per-account style/tone preference
+// (see CreativeBrief.brandBrief, gated by plan in src/lib/usage.ts) appended
+// to agent prompts so repeat generations stay visually/tonally consistent.
+function brandBriefLine(brief: CreativeBrief): string {
+  return brief.brandBrief ? `\n\nBrand style guide — follow this consistently: ${brief.brandBrief}` : ''
+}
+
 // ── Long-form video config ────────────────────────────────────────────────
 export const CLIP_DURATION_SEC = Number(process.env.VIDEO_CLIP_DURATION_SEC || 5)
 export const TARGET_DURATION_SEC = Number(process.env.VIDEO_TARGET_DURATION_SEC || 60)
@@ -269,9 +276,9 @@ export async function generateContent(
   brief: CreativeBrief = { contentType: 'kids_rhyme' }
 ): Promise<RhymeData> {
   const cfg = CONTENT_CONFIG[brief.contentType]
-  const user = feedback
+  const user = (feedback
     ? `Refine this ${cfg.contentLabel} based on feedback: "${feedback}". Create a completely new improved version. Version ${version}.`
-    : cfg.generatorUser(brief.userBrief)
+    : cfg.generatorUser(brief.userBrief)) + brandBriefLine(brief)
 
   const raw = await callGemini(cfg.generatorSystem, user)
   const data = safeJSON<{ rhyme: string; topic: string; learningConcept: string }>(raw)
@@ -321,7 +328,7 @@ Rules:
 - First shot: strong hook showing the main subject in an exciting moment.
 - Vary emoji and camera angles (close-up, wide shot, medium, overhead, tracking shot).
 - mood = single adjective like "joyful", "cinematic", "mysterious", "energetic".
-- backgroundStyle = setting description.`
+- backgroundStyle = setting description.${brandBriefLine(brief)}`
 
   const raw = await callGemini(
     system,
@@ -370,7 +377,7 @@ Generate detailed production metadata. Return ONLY valid JSON:
   "audioScript":"full narration script with tone directions...",
   "subtitles":[{"time":"0:00","text":"..."}],
   "lipSyncMap":[{"word":"...","startMs":0,"endMs":300}]
-}`
+}${brandBriefLine(brief)}`
 
   // lipSyncMap is one entry per word of the full narration script, so output
   // size scales with script length — the 4096-token default is enough for a

@@ -12,6 +12,7 @@ export type ContentType =
 export interface CreativeBrief {
   contentType: ContentType
   userBrief?: string
+  brandBrief?: string
 }
 
 export type PipelineEvent =

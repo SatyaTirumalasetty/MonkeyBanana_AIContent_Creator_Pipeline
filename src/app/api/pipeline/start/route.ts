@@ -21,7 +21,6 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const contentType = (url.searchParams.get('type') ?? 'kids_rhyme') as ContentType
   const userBrief = url.searchParams.get('brief') ?? undefined
-  const brief: CreativeBrief = { contentType, userBrief }
 
   const contentLabels: Record<ContentType, string> = {
     kids_rhyme: 'rhyme', poem: 'poem', short_film: 'script',
@@ -31,6 +30,7 @@ export async function GET(req: NextRequest) {
 
   const owner = await resolveOwner(req)
   const quota = await checkAndReserveUsage(owner)
+  const brief: CreativeBrief = { contentType, userBrief, brandBrief: owner.brandBrief }
 
   const encoder = new TextEncoder()
 

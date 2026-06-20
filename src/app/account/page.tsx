@@ -17,6 +17,9 @@ export default function AccountPage() {
   const [ready, setReady] = useState(false)
   const [portalLoading, setPortalLoading] = useState(false)
   const [error, setError] = useState('')
+  const [brandBrief, setBrandBrief] = useState('')
+  const [brandBriefSaved, setBrandBriefSaved] = useState(true)
+  const [brandBriefSaving, setBrandBriefSaving] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -26,15 +29,29 @@ export default function AccountPage() {
       setEmail(user.email ?? null)
       const { data: profile } = await supabase
         .from('profiles')
-        .select('plan, stripe_customer_id')
+        .select('plan, stripe_customer_id, brand_brief')
         .eq('id', user.id)
         .single()
       setPlan(profile?.plan ?? 'free')
       setHasSubscription(!!profile?.stripe_customer_id)
+      setBrandBrief(profile?.brand_brief ?? '')
       setReady(true)
     }
     load()
   }, [])
+
+  async function saveBrandBrief() {
+    setBrandBriefSaving(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      await supabase.from('profiles').update({ brand_brief: brandBrief || null }).eq('id', user.id)
+      setBrandBriefSaved(true)
+    } finally {
+      setBrandBriefSaving(false)
+    }
+  }
 
   async function openPortal() {
     setPortalLoading(true)
@@ -109,6 +126,29 @@ export default function AccountPage() {
             <p className="text-ink-300 text-sm">No active subscription. <a href="/pricing" className="text-accent-400 hover:text-accent-400/80">View plans →</a></p>
           )}
         </div>
+
+        {(plan === 'studio' || plan === 'cinema') && (
+          <div className="bg-ink-700 border border-ink-500 rounded-2xl p-5 sm:p-6 mb-4">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-1.5">Brand brief memory</div>
+            <p className="text-ink-300 text-xs mb-3">
+              Describe your brand&apos;s style, tone, or visual preferences once — every video you generate will follow it automatically.
+            </p>
+            <textarea
+              value={brandBrief}
+              onChange={(e) => { setBrandBrief(e.target.value); setBrandBriefSaved(false) }}
+              placeholder='e.g. "Warm, optimistic tone. Earthy color palette, no neon. Always mention our tagline: Made with care."'
+              rows={4}
+              className="w-full bg-ink-600 border border-ink-500 rounded-xl p-3 text-sm text-ink-50 placeholder:text-ink-400 focus:outline-none focus:border-accent-500 transition-colors resize-none mb-3"
+            />
+            <button
+              onClick={saveBrandBrief}
+              disabled={brandBriefSaving || brandBriefSaved}
+              className="px-4 py-2 rounded-xl font-semibold text-sm text-white bg-accent-500 hover:bg-accent-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {brandBriefSaving ? 'Saving...' : brandBriefSaved ? 'Saved ✓' : 'Save brand brief'}
+            </button>
+          </div>
+        )}
 
         <button onClick={signOut} className="text-sm text-ink-300 hover:text-ink-50 transition-colors">
           Sign out

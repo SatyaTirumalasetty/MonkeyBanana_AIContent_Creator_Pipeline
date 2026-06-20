@@ -13,6 +13,7 @@ export interface OwnerContext {
   plan: Plan
   anonId?: string
   isNewAnon: boolean
+  brandBrief?: string
 }
 
 function serviceClient() {
@@ -31,8 +32,12 @@ export async function resolveOwner(req: NextRequest): Promise<OwnerContext> {
     const supabase = createServerSupabase()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).single()
-      return { ownerKey: `user:${user.id}`, plan: (profile?.plan as Plan) ?? 'free', isNewAnon: false }
+      const { data: profile } = await supabase.from('profiles').select('plan, brand_brief').eq('id', user.id).single()
+      const plan = (profile?.plan as Plan) ?? 'free'
+      // Brand brief memory is a Studio/Cinema perk — gate it here so callers
+      // don't need to re-check the plan themselves.
+      const brandBrief = (plan === 'studio' || plan === 'cinema') ? profile?.brand_brief ?? undefined : undefined
+      return { ownerKey: `user:${user.id}`, plan, isNewAnon: false, brandBrief }
     }
   } catch { /* Supabase not configured or no session — fall back to anon */ }
 
