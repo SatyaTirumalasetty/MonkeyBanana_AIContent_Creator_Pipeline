@@ -250,6 +250,11 @@ function PricingContent() {
           <a href="/" className="text-accent-400 hover:text-accent-400/80 text-sm font-semibold transition-colors">
             ← Try it free first — no signup required
           </a>
+          <div className="mt-8 flex items-center justify-center gap-4 text-[12px] text-ink-300">
+            <a href="/privacy" className="hover:text-ink-100 transition-colors">Privacy Policy</a>
+            <span className="text-ink-500">·</span>
+            <a href="/terms" className="hover:text-ink-100 transition-colors">Terms of Service</a>
+          </div>
         </div>
       </div>
     </div>

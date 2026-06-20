@@ -889,6 +889,14 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <div className="border-t border-ink-500 px-4 sm:px-6 py-5 mt-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 text-[12px] text-ink-300">
+          <a href="/privacy" className="hover:text-ink-100 transition-colors">Privacy Policy</a>
+          <span className="text-ink-500">·</span>
+          <a href="/terms" className="hover:text-ink-100 transition-colors">Terms of Service</a>
+        </div>
+      </div>
     </div>
   )
 }
