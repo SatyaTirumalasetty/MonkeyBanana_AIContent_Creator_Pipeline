@@ -30,23 +30,22 @@ All four cross-reference each other and should already reflect current reality a
 
 ## Current state (as of 2026-06-20)
 
-**In production right now**: commit `70f0d1d` — confirmed `READY` on Vercel and live-verified.
+**In production right now**: commit `19073dc` — confirmed `READY` on Vercel and live-verified.
 
 **What's live and working**:
 - Server-side usage enforcement + job ownership (`cbac24a`) — verified end-to-end live, including a same-day production outage in `reserve_usage()` that was caught and fixed at the DB layer (see `/PO` Resolved).
 - `safeJSON` brace-matching fixed to be string-aware (`6849c80`) — verified, zero recurrences in an 8-call live sample.
-- Script panel renders `**label**` markdown as bold instead of literal asterisks (`8174845`) — verified via real browser DOM inspection.
+- Markdown (`**label**`) now renders as bold everywhere it's displayed: the script panel (`8174845`) and the storyboard caption overlay (`19073dc`) — both DOM-verified live via Playwright against production.
 - All 7 content types now generate successfully (`70f0d1d`) — `generateVideoMetadata`'s `maxOutputTokens` raised from the 4096 default to 16384, fixing a 100% failure rate on `educational`/`short_film`/`custom`. Re-verified live post-deploy: 6/6 across the 3 previously-broken types, with `video_meta`/`job`/`complete` events and a populated `lipSyncMap` confirmed present, not just absence of error.
 
 **What's broken right now, in priority order** (full detail in `/PO`):
-1. **P0 — no privacy policy / terms of service page.** Blocks Stripe live-mode activation. Not started. **This is now the single highest-priority open item.**
-2. **P1 — markdown fix is incomplete.** Storyboard caption overlay (`page.tsx:269`) reads the same raw script string independently and still shows literal `**`. Not started.
-3. **P1 — quota not refunded on failed generation.** Defense-in-depth gap; now rarer since the two dominant failure causes (`safeJSON`, `maxOutputTokens`) are both fixed, but still a real gap for whatever failures remain. Not started.
-4. **P1 — no video history/gallery UI.** Data layer supports it (`owner_key` scoping exists); no UI. Not started.
-5. Various P2 polish items — see `/PO`.
+1. **P0 — no privacy policy / terms of service page.** Blocks Stripe live-mode activation. Not started. **This is the single highest-priority open item.**
+2. **P1 — quota not refunded on failed generation.** Defense-in-depth gap; now rarer since the two dominant failure causes (`safeJSON`, `maxOutputTokens`) are both fixed, but still a real gap for whatever failures remain. Not started.
+3. **P1 — no video history/gallery UI.** Data layer supports it (`owner_key` scoping exists); no UI. Not started.
+4. Various P2 polish items — see `/PO`.
 
 ## Last session
 
-**2026-06-20**: Built server-side usage enforcement + job ownership from scratch (`cbac24a`), caught and fixed a same-day production outage in the new DB function (`/Architect`'s health check), hardened that function against unnecessary PUBLIC exposure, then ran two rounds of `/QA` testing that together found and fixed three real production bugs: `safeJSON` truncation (`6849c80`), markdown rendering in the script panel (`8174845`), and a 100%-failure-rate token-truncation bug in `generateVideoMetadata` affecting 3 of 7 content types (`70f0d1d`) — each fix was verified live against production, not just typechecked/built. One known-incomplete fix remains open (markdown in the storyboard caption overlay, separate from the script panel). Created the `/PO`, `/QA`, `/UX`, `/Architect`, and this `/Status` skill over the course of the session.
+**2026-06-20**: Built server-side usage enforcement + job ownership from scratch (`cbac24a`), caught and fixed a same-day production outage in the new DB function (`/Architect`'s health check), hardened that function against unnecessary PUBLIC exposure, then ran three rounds of `/QA` testing that together found and fixed four real production bugs: `safeJSON` truncation (`6849c80`), markdown rendering in the script panel (`8174845`) and then the storyboard caption overlay (`19073dc`), and a 100%-failure-rate token-truncation bug in `generateVideoMetadata` affecting 3 of 7 content types (`70f0d1d`) — every fix was verified live against production (not just typechecked/built), several requiring Playwright browser-level DOM checks since they were client-side-only. Created the `/PO`, `/QA`, `/UX`, `/Architect`, and this `/Status` skill over the course of the session. All known bugs from this session are now resolved.
 
 **Next action, if no other instruction is given**: the privacy/ToS page (P0 #1 above) — it's the only P0 left, and it's a small, well-scoped piece of work (two static pages + footer links) blocking Stripe live-mode activation.
