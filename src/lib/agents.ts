@@ -372,8 +372,13 @@ Generate detailed production metadata. Return ONLY valid JSON:
   "lipSyncMap":[{"word":"...","startMs":0,"endMs":300}]
 }`
 
+  // lipSyncMap is one entry per word of the full narration script, so output
+  // size scales with script length — the 4096-token default is enough for a
+  // short rhyme/ad but truncates mid-response for longer explainers/films,
+  // producing no parseable JSON at all.
   const raw = await callGemini(system,
-    `Generate video production metadata for this ${cfg.contentLabel}:\n${rhyme}\n\nStoryboard mood: ${storyboard.mood}\nCharacters: ${storyboard.characters.join(', ')}\nMusic: ${storyboard.musicStyle}`)
+    `Generate video production metadata for this ${cfg.contentLabel}:\n${rhyme}\n\nStoryboard mood: ${storyboard.mood}\nCharacters: ${storyboard.characters.join(', ')}\nMusic: ${storyboard.musicStyle}`,
+    16384)
   return safeJSON(raw)
 }
 
