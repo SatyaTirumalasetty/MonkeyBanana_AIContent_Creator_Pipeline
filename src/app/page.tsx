@@ -266,7 +266,7 @@ function VideoPreview({ storyboard, rhyme, videoScore }: {
       </div>
       <div className="absolute bottom-14 left-2 right-2">
         <div className="bg-black/70 backdrop-blur-sm rounded-lg px-3 py-1.5 text-center text-[11px] font-bold text-white leading-snug">
-          {lines[lineIdx]}
+          {renderScriptText(lines[lineIdx] ?? '')}
         </div>
       </div>
       <div className="absolute bottom-0 left-0 right-0 px-3 py-2 flex items-center justify-between bg-black/50 backdrop-blur-sm">
