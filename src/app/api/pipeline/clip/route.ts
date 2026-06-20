@@ -6,6 +6,7 @@ import path from 'path'
 import ffmpegPath from '@ffmpeg-installer/ffmpeg'
 import ffmpeg from 'fluent-ffmpeg'
 import { loadJob, saveJob, saveClip, saveReferenceImage } from '@/lib/jobStore'
+import { resolveOwner } from '@/lib/usage'
 import type { StoryboardShot, Storyboard, ContentType } from '@/types'
 
 ffmpeg.setFfmpegPath(ffmpegPath.path)
@@ -77,6 +78,9 @@ export async function POST(req: NextRequest) {
   const job = await loadJob(jobId)
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
+  const owner = await resolveOwner(req)
+  if (job.ownerKey !== owner.ownerKey) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+
   const clip = job.clips[clipIndex]
   if (!clip) return NextResponse.json({ error: 'Clip index out of range' }, { status: 400 })
 
@@ -87,12 +91,32 @@ export async function POST(req: NextRequest) {
   clip.status = 'generating'
   await saveJob(job)
 
+  const shot = job.storyboard.shots[clipIndex]
+  const videoMeta = job.videoMeta
+  const contentType = job.contentType
+
+  async function runFlux(): Promise<Buffer> {
+    const fluxPrompt = `${shot.description}, ${shot.camera}. ${FLUX_STYLE[contentType ?? 'custom']}`
+    const fluxResult = await fal.run('fal-ai/flux/schnell', {
+      input: { prompt: fluxPrompt, image_size: 'portrait_16_9', num_images: 1 },
+    }) as unknown as { images: Array<{ url: string }> }
+    const imgRes = await fetch(fluxResult.images[0].url)
+    if (!imgRes.ok) throw new Error(`Flux download failed: ${imgRes.status}`)
+    const imgBuf = Buffer.from(await imgRes.arrayBuffer())
+    const [{ renderFluxFrame, captionForShot }, { renderSlideClip }] = await Promise.all([
+      import('@/lib/renderShot'),
+      import('@/lib/renderClip'),
+    ])
+    const caption = captionForShot(shot, videoMeta)
+    const frameBuffer = await renderFluxFrame(imgBuf, caption)
+    return await renderSlideClip(frameBuffer, clip.durationSec, clipIndex % 2 === 0)
+  }
+
   try {
-    const shot = job.storyboard.shots[clipIndex]
     let videoBuffer: Buffer | undefined
 
-    if (process.env.FAL_KEY) {
-      // ── Kling AI path ──────────────────────────────────────────────────────
+    if (process.env.FAL_KEY && job.useKling) {
+      // ── Kling AI path (studio/cinema plans, within their monthly limit) ─────
       try {
         fal.config({ credentials: process.env.FAL_KEY })
         const prompt = buildKlingPrompt(shot, job.storyboard, job.contentType)
@@ -137,20 +161,7 @@ export async function POST(req: NextRequest) {
           // Kling needs credits — try Flux Schnell image tier (~$0.003/image)
           console.warn(`[clip/${clipIndex}] Kling AI 403 Forbidden — trying Flux Schnell image tier`)
           try {
-            const fluxPrompt = `${shot.description}, ${shot.camera}. ${FLUX_STYLE[job.contentType ?? 'custom']}`
-            const fluxResult = await fal.run('fal-ai/flux/schnell', {
-              input: { prompt: fluxPrompt, image_size: 'portrait_16_9', num_images: 1 },
-            }) as unknown as { images: Array<{ url: string }> }
-            const imgRes = await fetch(fluxResult.images[0].url)
-            if (!imgRes.ok) throw new Error(`Flux download failed: ${imgRes.status}`)
-            const imgBuf = Buffer.from(await imgRes.arrayBuffer())
-            const [{ renderFluxFrame, captionForShot }, { renderSlideClip }] = await Promise.all([
-              import('@/lib/renderShot'),
-              import('@/lib/renderClip'),
-            ])
-            const caption = captionForShot(shot, job.videoMeta)
-            const frameBuffer = await renderFluxFrame(imgBuf, caption)
-            videoBuffer = await renderSlideClip(frameBuffer, clip.durationSec, clipIndex % 2 === 0)
+            videoBuffer = await runFlux()
           } catch (fluxErr) {
             console.warn(`[clip/${clipIndex}] Flux Schnell failed — falling back to canvas`, fluxErr)
             // videoBuffer stays undefined → canvas fallback below
@@ -158,6 +169,14 @@ export async function POST(req: NextRequest) {
         } else {
           throw falErr
         }
+      }
+    } else if (process.env.FAL_KEY && job.useFlux) {
+      // ── Flux image-to-video tier (Creator plan and above) ───────────────────
+      try {
+        videoBuffer = await runFlux()
+      } catch (fluxErr) {
+        console.warn(`[clip/${clipIndex}] Flux Schnell failed — falling back to canvas`, fluxErr)
+        // videoBuffer stays undefined → canvas fallback below
       }
     }
 

@@ -5,6 +5,7 @@ import path from 'path'
 import ffmpegPath from '@ffmpeg-installer/ffmpeg'
 import ffmpeg from 'fluent-ffmpeg'
 import { loadJob, saveJob, saveFinalVideo } from '@/lib/jobStore'
+import { resolveOwner } from '@/lib/usage'
 
 ffmpeg.setFfmpegPath(ffmpegPath.path)
 
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest) {
 
   const job = await loadJob(jobId)
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+
+  const owner = await resolveOwner(req)
+  if (job.ownerKey !== owner.ownerKey) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
   if (job.finalVideoUrl) return NextResponse.json({ job })
 

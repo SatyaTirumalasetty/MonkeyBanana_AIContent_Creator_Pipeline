@@ -24,7 +24,7 @@ export async function saveJob(job: VideoJob): Promise<void> {
   const supabase = getServiceClient()
   const { error } = await supabase
     .from('video_jobs')
-    .upsert({ id: job.id, data: job, updated_at: new Date().toISOString() })
+    .upsert({ id: job.id, data: job, owner_key: job.ownerKey, updated_at: new Date().toISOString() })
   if (error) throw new Error(`saveJob failed: ${error.message}`)
 }
 

@@ -46,25 +46,11 @@ const TEMPLATES: { label: string; brief: string; type: ContentType }[] = [
 ]
 
 const CACHE_KEY = 'ai_studio_result_v2'
-const USAGE_KEY = 'ai_studio_usage'
-const FREE_LIMIT = 3
 
-function getUsageCount(): number {
-  try {
-    const raw = localStorage.getItem(USAGE_KEY)
-    if (!raw) return 0
-    const data = JSON.parse(raw) as { count: number; month: string }
-    if (data.month !== new Date().toISOString().slice(0, 7)) return 0
-    return data.count ?? 0
-  } catch { return 0 }
-}
-
-function incrementUsage(): number {
-  const count = getUsageCount() + 1
-  try {
-    localStorage.setItem(USAGE_KEY, JSON.stringify({ count, month: new Date().toISOString().slice(0, 7) }))
-  } catch { /* quota */ }
-  return count
+interface UsageSnapshot {
+  plan: string
+  videoCount: number
+  videoLimit: number | null
 }
 
 // ── Copy Button ───────────────────────────────────────────────────────────────
@@ -349,14 +335,21 @@ export default function Home() {
   const [capTab, setCapTab] = useState<Platform>('youtube')
   const [showPublish, setShowPublish] = useState(false)
   const [agentMessages, setAgentMessages] = useState<Partial<Record<StepId, string>>>({})
-  const [usageCount, setUsageCount] = useState(0)
+  const [usage, setUsage] = useState<UsageSnapshot>({ plan: 'free', videoCount: 0, videoLimit: 3 })
   const [scriptExpanded, setScriptExpanded] = useState(true)
   const abortRef = useRef<AbortController | null>(null)
   const activeStepRef = useRef<StepId | null>(null)
 
-  // Load cache and usage count on mount
+  const refreshUsage = useCallback(async () => {
+    try {
+      const res = await fetch('/api/usage')
+      if (res.ok) setUsage(await res.json())
+    } catch { /* offline — keep last known usage */ }
+  }, [])
+
+  // Load cache and server-side usage on mount
   useEffect(() => {
-    setUsageCount(getUsageCount())
+    refreshUsage()
     try {
       const saved = localStorage.getItem(CACHE_KEY)
       if (!saved) return
@@ -482,6 +475,7 @@ export default function Home() {
 
   const startPipeline = useCallback(async () => {
     if (running) return
+    if (usage.videoLimit !== null && usage.videoCount >= usage.videoLimit) return
     reset()
     setRunning(true)
     abortRef.current = new AbortController()
@@ -536,9 +530,9 @@ export default function Home() {
       }
     } finally {
       setRunning(false)
-      setUsageCount(incrementUsage())
+      refreshUsage()
     }
-  }, [running, reset, setStep, addLog, renderVideo, contentType, userBrief])
+  }, [running, usage, reset, setStep, addLog, renderVideo, contentType, userBrief, refreshUsage])
 
   useEffect(() => {
     if (!complete || !rhyme) return
@@ -574,8 +568,9 @@ export default function Home() {
 
   const selectedTypeMeta = CONTENT_TYPES.find(t => t.id === contentType)!
   const contentLabel = CONTENT_LABEL[contentType]
-  const videosLeft = Math.max(0, FREE_LIMIT - usageCount)
-  const isOverLimit = usageCount >= FREE_LIMIT
+  const videosLeft = usage.videoLimit === null ? null : Math.max(0, usage.videoLimit - usage.videoCount)
+  const isOverLimit = usage.videoLimit !== null && usage.videoCount >= usage.videoLimit
+  const isUnlimited = usage.videoLimit === null
   // suppress unused-variable lint for agentMessages (kept for cache compat)
   void agentMessages; void cachedAt; void logs
 
@@ -586,9 +581,11 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <Logo subtitle="Turn any idea into a short video in 90 seconds" />
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${isOverLimit ? 'border-amber-600 bg-amber-500/10 text-amber-300' : 'border-ink-500 bg-ink-700 text-ink-200'}`}>
-              {isOverLimit ? '⚠️ Free limit reached' : `🎬 ${videosLeft} free video${videosLeft !== 1 ? 's' : ''} left`}
-            </div>
+            {!isUnlimited && (
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${isOverLimit ? 'border-amber-600 bg-amber-500/10 text-amber-300' : 'border-ink-500 bg-ink-700 text-ink-200'}`}>
+                {isOverLimit ? '⚠️ Free limit reached' : `🎬 ${videosLeft} free video${videosLeft !== 1 ? 's' : ''} left`}
+              </div>
+            )}
             <div className="flex items-center gap-2 bg-ink-700 border border-ink-500 rounded-full px-4 py-1.5">
               <div className={`w-2 h-2 rounded-full ${running ? 'bg-emerald-400 animate-pulse' : complete ? 'bg-accent-400' : 'bg-ink-400'}`} />
               <span className="text-[11px] font-semibold text-ink-200">
@@ -822,7 +819,7 @@ export default function Home() {
             </div>
 
             {/* Upgrade CTA — shows after 2 videos used */}
-            {usageCount >= 2 && (
+            {!isUnlimited && usage.videoCount >= 2 && (
               <div className="bg-ink-700 border border-accent-700/50 rounded-2xl p-4">
                 <div className="text-[11px] font-semibold text-accent-400 mb-1">
                   {isOverLimit ? '🔒 Free limit reached' : '⚡ Almost out of free videos'}
@@ -830,7 +827,7 @@ export default function Home() {
                 <div className="text-[10px] text-ink-300 mb-3">
                   {isOverLimit
                     ? 'Upgrade to Creator for unlimited AI videos.'
-                    : `You've used ${usageCount} of ${FREE_LIMIT} free videos this month.`}
+                    : `You've used ${usage.videoCount} of ${usage.videoLimit} free videos this month.`}
                 </div>
                 <div className="flex flex-col gap-1.5 mb-3">
                   {['Unlimited AI image videos', 'No watermarks', '20 Kling AI videos/month'].map(f => (
@@ -854,12 +851,14 @@ export default function Home() {
             <div className="flex flex-col gap-2">
               <button
                 onClick={startPipeline}
-                disabled={running}
+                disabled={running || isOverLimit}
                 className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: running ? '#181923' : 'linear-gradient(135deg,#6D5DFC,#22D3EE)', color: '#fff', border: running ? '1px solid #34374A' : 'none' }}
               >
                 {running ? (
                   <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Creating...</>
+                ) : isOverLimit ? (
+                  <>🔒 Free limit reached</>
                 ) : (
                   <><span>{selectedTypeMeta.icon}</span>{complete ? '🔄 Create Another' : `✨ Generate ${selectedTypeMeta.label}`}</>
                 )}

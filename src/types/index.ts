@@ -161,4 +161,7 @@ export interface VideoJob {
   referenceImageUrl?: string
   finalVideoUrl?: string
   error?: string
+  ownerKey: string
+  useKling: boolean
+  useFlux: boolean
 }

@@ -6,6 +6,7 @@ import {
 } from '@/lib/agents'
 import type { VideoScore } from '@/types'
 import { createJobId, saveJob } from '@/lib/jobStore'
+import { resolveOwner, checkAndReserveUsage, ANON_COOKIE } from '@/lib/usage'
 import type { ClipState, VideoJob, ContentType, CreativeBrief } from '@/types'
 
 export const runtime = 'nodejs'
@@ -28,6 +29,9 @@ export async function GET(req: NextRequest) {
   }
   const label = contentLabels[contentType] ?? 'content'
 
+  const owner = await resolveOwner(req)
+  const quota = await checkAndReserveUsage(owner)
+
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
@@ -41,6 +45,12 @@ export async function GET(req: NextRequest) {
       }
       function setStep(id: string, status: string) {
         send('step', { id, status })
+      }
+
+      if (!quota.allowed) {
+        send('error', { message: quota.reason, code: 'limit_reached' })
+        controller.close()
+        return
       }
 
       try {
@@ -145,6 +155,9 @@ export async function GET(req: NextRequest) {
           clips,
           contentType,
           userBrief,
+          ownerKey: owner.ownerKey,
+          useKling: quota.useKling,
+          useFlux: quota.useFlux,
         }
         await saveJob(job)
         send('job', job)
@@ -164,12 +177,15 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
+  const headers = new Headers({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
   })
+  if (owner.isNewAnon && owner.anonId) {
+    headers.append('Set-Cookie', `${ANON_COOKIE}=${owner.anonId}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly`)
+  }
+
+  return new Response(stream, { headers })
 }
