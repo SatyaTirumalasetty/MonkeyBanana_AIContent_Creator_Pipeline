@@ -53,6 +53,19 @@ interface UsageSnapshot {
   videoLimit: number | null
 }
 
+// ── Script text renderer ─────────────────────────────────────────────────────
+// Several content types (ads, explainers, short films, custom) come back
+// with **label** markers (e.g. "**Visuals:**") — render them as emphasis
+// instead of leaving literal asterisks, since they're genuinely useful
+// structure for scanning a script before production, not noise to strip.
+function renderScriptText(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i} className="font-semibold text-accent-400">{part.slice(2, -2)}</strong>
+      : <span key={i}>{part}</span>
+  )
+}
+
 // ── Copy Button ───────────────────────────────────────────────────────────────
 function CopyButton({ text, label = 'Copy caption' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false)
@@ -647,7 +660,7 @@ export default function Home() {
                 {scriptExpanded && (
                   <div className="px-5 pb-4">
                     <div className="bg-ink-600 border border-accent-700/40 rounded-xl p-4 text-sm leading-loose whitespace-pre-wrap text-ink-100">
-                      {rhyme.rhyme}
+                      {renderScriptText(rhyme.rhyme)}
                     </div>
                     {rhymeScore && (
                       <div className={`mt-3 px-3 py-2 rounded-xl text-[11px] font-semibold inline-flex items-center gap-2 ${rhymeScore.approved ? 'bg-emerald-500/10 border border-emerald-700 text-emerald-300' : 'bg-amber-500/10 border border-amber-700 text-amber-300'}`}>

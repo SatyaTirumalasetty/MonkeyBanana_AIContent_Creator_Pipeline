@@ -37,8 +37,11 @@ When invoked via `/UX`, act as the UX designer, not just a styling opinion:
 
 - [ ] **"Pipeline complete!" banner fires before the video finishes rendering** (`src/app/page.tsx` — `complete` state set on the SSE `complete` event, before `renderVideo()`/stitching finishes). Users see a false "done" signal while clips are still rendering — a trust/feedback-accuracy problem, not just timing.
 - [ ] **No upfront wait-time framing.** First-time users get no expectation-setting (e.g., "~90 seconds") before generation starts — just a bare progress bar. Classic uncertainty-reduction gap.
-- [ ] **Markdown renders as literal asterisks** in the script panel for 5 of 7 content types (`whitespace-pre-wrap`, no markdown parsing) — a readability/credibility issue for `advertisement`, `educational`, `short_film`, `custom`.
 - [ ] **No video history/gallery view** — once a new video generates, the previous one is inaccessible from the UI (state lives in a single `localStorage` slot). Users have no way to revisit or compare past work.
 - [ ] **No Open Graph/Twitter Card preview** — sharing the studio's own link shows an unbranded blank preview, undermining the product's own "shareable content" value proposition.
+
+## Resolved (for reference — do not re-flag)
+
+- [x] **Markdown rendered as literal asterisks in the script panel** (fixed 2026-06-20). Design decision: render the `**label**` markers as `<strong>` emphasis rather than suppress them via prompt instructions — they're useful scanning structure for `advertisement`/`educational`/`short_film`/`custom` scripts, and relying on LLM formatting compliance was rejected as fragile (same lesson as the `safeJSON` incident — don't trust the model to self-format, handle it on the rendering side). Added a small `renderScriptText()` inline-bold splitter in `src/app/page.tsx` (no new dependency, fits the existing small-component pattern next to `CopyButton`). Accessibility: uses semantic `<strong>` plus `font-semibold`, not color alone, so the emphasis survives in any context that strips color. Verified against the real `advertisement` output captured during `/QA`'s test pass — correctly bolds `**VISUAL:**`/`**VO (Energetic):**` and leaves the rest plain.
 
 These overlap with `/PO`'s backlog by design — when fixing one, check whether the other skill's file also needs its checkbox flipped.
