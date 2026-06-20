@@ -160,6 +160,7 @@ export interface VideoJob {
   userBrief?: string
   referenceImageUrl?: string
   finalVideoUrl?: string
+  narrationAudioUrl?: string
   error?: string
   ownerKey: string
   useKling: boolean

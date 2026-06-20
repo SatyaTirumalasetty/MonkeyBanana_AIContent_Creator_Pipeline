@@ -382,6 +382,48 @@ Generate detailed production metadata. Return ONLY valid JSON:
   return safeJSON(raw)
 }
 
+// Wraps raw 16-bit PCM in a WAV header — Gemini TTS returns headerless PCM
+// (24kHz, mono, 16-bit), which ffmpeg and browsers need a container to read.
+function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitsPerSample = 16): Buffer {
+  const blockAlign = channels * (bitsPerSample / 8)
+  const header = Buffer.alloc(44)
+  header.write('RIFF', 0)
+  header.writeUInt32LE(36 + pcm.length, 4)
+  header.write('WAVE', 8)
+  header.write('fmt ', 12)
+  header.writeUInt32LE(16, 16)
+  header.writeUInt16LE(1, 20) // PCM
+  header.writeUInt16LE(channels, 22)
+  header.writeUInt32LE(sampleRate, 24)
+  header.writeUInt32LE(sampleRate * blockAlign, 28)
+  header.writeUInt16LE(blockAlign, 32)
+  header.writeUInt16LE(bitsPerSample, 34)
+  header.write('data', 36)
+  header.writeUInt32LE(pcm.length, 40)
+  return Buffer.concat([header, pcm])
+}
+
+// ── Agent 4b: Narration TTS ────────────────────────────────────────────────────
+// Synthesizes the clean spoken lines (subtitles, not the parenthetical-laden
+// audioScript) into a WAV file via Gemini's native TTS — same API key and SDK
+// as the content agents, no separate TTS provider/credential needed.
+export async function synthesizeNarration(subtitles: { text: string }[]): Promise<Buffer> {
+  const script = subtitles.map(s => s.text).join(' ')
+  const response = await genai.models.generateContent({
+    model: 'gemini-3.1-flash-tts-preview',
+    contents: [{ parts: [{ text: script }] }],
+    config: {
+      responseModalities: ['AUDIO'],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+      },
+    },
+  })
+  const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
+  if (!data) throw new Error('No audio returned from TTS')
+  return pcmToWav(Buffer.from(data, 'base64'))
+}
+
 // ── Agent 5: Video Reviewer ───────────────────────────────────────────────────
 export async function reviewVideo(
   storyboard: Storyboard,

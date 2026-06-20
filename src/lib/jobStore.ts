@@ -55,3 +55,8 @@ export async function saveFinalVideo(jobId: string, bytes: Buffer): Promise<stri
   const { url } = await put(`jobs/${jobId}/final.mp4`, bytes, { ...blobOpts, contentType: 'video/mp4' })
   return url
 }
+
+export async function saveNarrationAudio(jobId: string, bytes: Buffer): Promise<string> {
+  const { url } = await put(`jobs/${jobId}/narration.wav`, bytes, { ...blobOpts, contentType: 'audio/wav' })
+  return url
+}

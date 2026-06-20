@@ -13,15 +13,32 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-function stitchClips(inputPaths: string[], outputPath: string): Promise<void> {
+function stitchClips(inputPaths: string[], audioPath: string | undefined, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const command = ffmpeg()
     inputPaths.forEach(p => command.input(p))
     const filter = inputPaths.map((_, i) => `[${i}:v]`).join('') + `concat=n=${inputPaths.length}:v=1:a=0[outv]`
+    const outputOptions = ['-pix_fmt', 'yuv420p', '-movflags', '+faststart']
+
+    if (audioPath) {
+      // complexFilter's second arg auto-adds "-map [outv]" — passing it here
+      // too would double-map the same pad and ffmpeg rejects that, so when
+      // muxing audio we map both streams explicitly instead.
+      command.input(audioPath)
+      command.complexFilter(filter)
+      // -shortest caps the muxed output to whichever stream is shorter — the
+      // synthesized narration's length rarely matches the fixed clip-count
+      // video duration exactly, so this avoids trailing silence or a frozen
+      // last frame while audio keeps playing.
+      outputOptions.push('-map', '[outv]', '-map', `${inputPaths.length}:a`, '-shortest')
+      command.audioCodec('aac')
+    } else {
+      command.complexFilter(filter, 'outv')
+    }
+
     command
-      .complexFilter(filter, 'outv')
       .videoCodec('libx264')
-      .outputOptions(['-pix_fmt', 'yuv420p', '-movflags', '+faststart'])
+      .outputOptions(outputOptions)
       .output(outputPath)
       .on('end', () => resolve())
       .on('error', (err) => reject(err))
@@ -59,8 +76,19 @@ export async function POST(req: NextRequest) {
       inputPaths.push(p)
     }
 
+    let audioPath: string | undefined
+    if (job.narrationAudioUrl) {
+      const res = await fetch(job.narrationAudioUrl)
+      if (res.ok) {
+        audioPath = path.join(workDir, 'narration.wav')
+        await fs.writeFile(audioPath, Buffer.from(await res.arrayBuffer()))
+      }
+      // If the download fails, fall through and stitch silently rather than
+      // failing the whole render over a missing audio track.
+    }
+
     const outputPath = path.join(workDir, 'final.mp4')
-    await stitchClips(inputPaths, outputPath)
+    await stitchClips(inputPaths, audioPath, outputPath)
 
     const finalBytes = await fs.readFile(outputPath)
     const url = await saveFinalVideo(job.id, finalBytes)

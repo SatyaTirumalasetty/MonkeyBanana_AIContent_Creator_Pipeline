@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server'
 import {
   generateContent, reviewRhyme, planStoryboard,
-  generateVideoMetadata, generateSocialAssets,
+  generateVideoMetadata, generateSocialAssets, synthesizeNarration,
   NUM_CLIPS, CLIP_DURATION_SEC, TARGET_DURATION_SEC,
 } from '@/lib/agents'
 import type { VideoScore } from '@/types'
-import { createJobId, saveJob } from '@/lib/jobStore'
+import { createJobId, saveJob, saveNarrationAudio } from '@/lib/jobStore'
 import { resolveOwner, checkAndReserveUsage, ANON_COOKIE } from '@/lib/usage'
 import type { ClipState, VideoJob, ContentType, CreativeBrief } from '@/types'
 
@@ -114,6 +114,19 @@ export async function GET(req: NextRequest) {
         setStep('video', 'done')
         log('Video production package complete ✓', 'success')
 
+        // ── STEP 4b: Narration TTS ────────────────────────────────────────────
+        const jobId = await createJobId()
+        let narrationAudioUrl: string | undefined
+        try {
+          log('Synthesizing narration audio...', 'agent')
+          const audioBuffer = await synthesizeNarration(videoMeta.subtitles)
+          narrationAudioUrl = await saveNarrationAudio(jobId, audioBuffer)
+          log('Narration audio ready ✓', 'success')
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error'
+          log(`Narration synthesis failed (${msg}) — video will render without audio`, 'warning')
+        }
+
         // ── STEP 5: Emit default video score (no review agent) ───────────────
         const defaultScore: VideoScore = {
           videoQuality: 8, audioQuality: 8, audioSync: 8,
@@ -143,7 +156,7 @@ export async function GET(req: NextRequest) {
         }))
 
         const job: VideoJob = {
-          id: await createJobId(),
+          id: jobId,
           createdAt: new Date().toISOString(),
           status: 'generating_clips',
           rhyme: rhymeData!,
@@ -155,6 +168,7 @@ export async function GET(req: NextRequest) {
           clips,
           contentType,
           userBrief,
+          narrationAudioUrl,
           ownerKey: owner.ownerKey,
           useKling: quota.useKling,
           useFlux: quota.useFlux,
