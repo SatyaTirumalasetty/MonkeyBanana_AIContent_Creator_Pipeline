@@ -39,6 +39,15 @@ When invoked via `/Architect`, act as the architect, not just an implementer:
 - **No rate limiting / abuse protection beyond the monthly usage cap** — a single owner could still fire concurrent generation requests within their quota and exhaust function concurrency or fal.ai spend in a burst. Worth flagging if asked about cost or DoS exposure.
 - **No observability layer** (no structured logging/metrics beyond Vercel's default function logs) — if asked about reliability or debugging production issues, this is the gap to name.
 
+## Known open findings from the last general health check (2026-06-20 — re-verify before reporting, items get fixed)
+
+- [ ] **Production dependency has multiple known CVEs, including critical.** `next@14.2.5` is pinned exact (not a semver range) in `package.json`, and is behind on patches that fix real cache-poisoning/auth-bypass/DoS advisories. `npm audit` shows the fix is `next@14.2.35` — same minor version, patch-level, low regression risk. Hasn't been applied yet because it changes a pinned production dependency — needs a deliberate decision, not a silent bump.
+- [ ] **`handle_new_user()` Postgres trigger function is `SECURITY DEFINER` and PUBLIC-executable** via `/rest/v1/rpc/handle_new_user` (anon + authenticated). Pre-existing (from the original auth setup, `fad4605`), not something introduced recently. It's meant to fire via an `auth.users` insert trigger, not direct RPC — same shape of unnecessary exposure as `reserve_usage` was, but unverified whether it's actually safe to revoke without breaking signup (would need to confirm the trigger doesn't also rely on being independently callable before touching it).
+- [ ] **Supabase Auth leaked-password protection is disabled** (HaveIBeenPwned check) — a dashboard toggle, not a code change, low effort.
+- [ ] **`profiles` RLS policies re-evaluate `auth.uid()` per row** instead of `(select auth.uid())` — a documented Postgres RLS performance pattern. Irrelevant at the table's current size (1 row) but worth fixing opportunistically since it's a one-line change per policy.
+
+**Standing lesson from this health check**: a clean `tsc`/`next build` proved nothing about whether `reserve_usage()` actually executed correctly — it had been throwing on every real invocation since deploy, caught only by running it directly as the role the app uses. Any new Postgres function/RPC introduced going forward must be exercised with `set local role <app's actual role>` (typically `service_role`) before being called verified — see `/QA`'s standing rule on this.
+
 ## How to use this skill
 
 1. **State the requirement before the design.** What's actually being asked to scale, secure, or integrate — confirm it against `/PO`'s vision if there's any ambiguity.

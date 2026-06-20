@@ -8,10 +8,21 @@ function safeJSON<T>(text: string): T {
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
   const start = clean.indexOf('{')
   if (start === -1) throw new Error('No JSON found in response')
-  let depth = 0, end = -1
+  // Brace-match while tracking string literals, so a literal `{`/`}` inside
+  // a generated text field (e.g. an audio cue like "{gentle chime}") doesn't
+  // get counted as structural and slice the candidate at the wrong position.
+  let depth = 0, end = -1, inString = false, escaped = false
   for (let i = start; i < clean.length; i++) {
-    if (clean[i] === '{') depth++
-    else if (clean[i] === '}') { depth--; if (depth === 0) { end = i; break } }
+    const ch = clean[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') depth++
+    else if (ch === '}') { depth--; if (depth === 0) { end = i; break } }
   }
   if (end === -1) throw new Error('No JSON found in response')
   const candidate = clean.slice(start, end + 1)
