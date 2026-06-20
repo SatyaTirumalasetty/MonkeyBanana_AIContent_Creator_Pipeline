@@ -1,32 +1,42 @@
-import { put, list } from '@vercel/blob'
+import { put } from '@vercel/blob'
+import { createClient } from '@supabase/supabase-js'
 import type { VideoJob } from '@/types'
 
 const blobOpts = { access: 'public' as const, addRandomSuffix: false, allowOverwrite: true }
+
+// Job *state* lives in Postgres (strongly consistent) rather than Vercel Blob —
+// Blob's list() API has eventual-consistency lag on overwrites, which caused the
+// stitch route to intermittently report "Job not found" right after the last
+// clip finished. Blob remains the right place for the actual binary files below.
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+}
 
 export async function createJobId(): Promise<string> {
   return crypto.randomUUID()
 }
 
 export async function saveJob(job: VideoJob): Promise<void> {
-  await put(`jobs/${job.id}/state.json`, JSON.stringify(job), {
-    ...blobOpts,
-    contentType: 'application/json',
-  })
+  const supabase = getServiceClient()
+  const { error } = await supabase
+    .from('video_jobs')
+    .upsert({ id: job.id, data: job, updated_at: new Date().toISOString() })
+  if (error) throw new Error(`saveJob failed: ${error.message}`)
 }
 
 export async function loadJob(id: string): Promise<VideoJob | null> {
-  // Vercel Blob list() uses S3 which can have eventual-consistency lag after a
-  // fresh put(). Retry up to 4 times with backoff so the stitch route doesn't
-  // fail immediately after the last clip is saved.
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const { blobs } = await list({ prefix: `jobs/${id}/state.json`, limit: 1 })
-    if (blobs.length) {
-      const res = await fetch(blobs[0].url, { cache: 'no-store' })
-      if (res.ok) return res.json() as Promise<VideoJob>
-    }
-    if (attempt < 3) await new Promise(r => setTimeout(r, 750 * (attempt + 1)))
-  }
-  return null
+  const supabase = getServiceClient()
+  const { data, error } = await supabase
+    .from('video_jobs')
+    .select('data')
+    .eq('id', id)
+    .single()
+  if (error || !data) return null
+  return data.data as VideoJob
 }
 
 export async function saveClip(jobId: string, clipIndex: number, bytes: Buffer, mimeType: string): Promise<string> {

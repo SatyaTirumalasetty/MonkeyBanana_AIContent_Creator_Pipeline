@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
 
     job.status = 'complete'
     job.finalVideoUrl = url
+    job.error = undefined
     await saveJob(job)
 
     return NextResponse.json({ job })
