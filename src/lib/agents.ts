@@ -89,6 +89,34 @@ function formatTimestamp(startSec: number, endSec: number): string {
   return `${fmt(startSec)}-${fmt(endSec)}`
 }
 
+// ── Content-type auto-detection ──────────────────────────────────────────
+// Lets the brief textarea be the primary input — the user doesn't have to
+// pick a category before typing. Runs as its own cheap, low-token call
+// rather than folding detection into generateContent, since the 7 content
+// types use materially different system prompts/review rubrics further
+// downstream and need a type decided *before* that branch is chosen.
+const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
+  kids_rhyme: 'kids_rhyme — educational rhyme/song for toddlers',
+  poem: 'poem — evocative poetry, any audience',
+  short_film: 'short_film — cinematic micro-narrative with characters/plot',
+  advertisement: 'advertisement — product/service ad with a hook and CTA',
+  educational: 'educational — explainer of a concept or how something works',
+  music_video: 'music_video — song lyrics with a visual treatment',
+  custom: 'custom — anything that doesn\'t clearly fit the other categories',
+}
+
+export async function classifyContentType(brief: string): Promise<ContentType> {
+  const system = `Classify a short video brief into exactly one category. Return ONLY valid JSON: {"contentType":"..."}
+Categories:
+${Object.values(CONTENT_TYPE_LABELS).map(l => `- ${l}`).join('\n')}
+If the brief is ambiguous or doesn't clearly match a specific category, return "custom".`
+  const raw = await callGemini(system, `Brief: "${brief}"`, 256)
+  const data = safeJSON<{ contentType: string }>(raw)
+  return (Object.keys(CONTENT_TYPE_LABELS) as ContentType[]).includes(data.contentType as ContentType)
+    ? data.contentType as ContentType
+    : 'custom'
+}
+
 // ── Per-content-type configuration ───────────────────────────────────────
 type ContentConfig = {
   contentLabel: string

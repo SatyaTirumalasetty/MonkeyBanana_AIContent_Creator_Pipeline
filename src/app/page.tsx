@@ -107,32 +107,66 @@ function TypeCard({ ct, selected, onSelect, disabled }: {
 }
 
 // ── Content Type Selector ─────────────────────────────────────────────────────
+// Brief-first: the textarea is the primary action, content type is
+// auto-detected from what's typed (see classifyContentType in agents.ts).
+// The tile grid still exists for users who want to pick the format
+// explicitly — and for ones who don't know what to type yet — but it's
+// secondary, collapsed by default, instead of the first thing on screen.
 function ContentTypeSelector({
-  selected, onSelect, brief, onBriefChange, disabled,
+  selected, onSelect, brief, onBriefChange, disabled, manuallySet, detecting,
 }: {
   selected: ContentType; onSelect: (t: ContentType) => void
   brief: string; onBriefChange: (v: string) => void; disabled?: boolean
+  manuallySet: boolean; detecting: boolean
 }) {
+  const [showTypes, setShowTypes] = useState(false)
   const meta = CONTENT_TYPES.find(t => t.id === selected)!
   return (
     <div className="bg-ink-700 border border-ink-500 rounded-2xl p-4 sm:p-5">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-4">What do you want to create?</div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-        {CONTENT_TYPES.map(ct => (
-          <TypeCard key={ct.id} ct={ct} selected={selected} onSelect={onSelect} disabled={disabled} />
-        ))}
-      </div>
-      <div className="text-[12px] text-ink-200 mb-2">{meta.desc}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 mb-3">What do you want to create?</div>
       <textarea
         value={brief}
         onChange={e => onBriefChange(e.target.value)}
-        placeholder={meta.placeholder}
+        placeholder='Describe anything — "a kids rhyme about counting ducks," "a 30s ad for cold brew coffee," "a poem about rain"...'
         maxLength={500}
-        rows={2}
+        rows={3}
         disabled={disabled}
         className="w-full bg-ink-600 border border-ink-500 rounded-xl px-3 py-2 text-[13px] text-ink-100 placeholder-ink-300 resize-none focus:outline-none focus:border-accent-500 transition-colors disabled:opacity-40"
       />
-      <div className="text-[10px] text-ink-400 mt-1">Optional — leave blank for AI to decide · {brief.length}/500</div>
+      <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+        <div className="text-[10px] text-ink-400">{brief.length}/500</div>
+        <div className="flex items-center gap-2">
+          {detecting ? (
+            <span className="text-[11px] font-semibold text-accent-400 flex items-center gap-1.5">
+              <span className="w-3 h-3 border-2 border-accent-700 border-t-accent-400 rounded-full animate-spin" />
+              Detecting format...
+            </span>
+          ) : (
+            <span
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+              style={{ background: `${meta.color}14`, color: meta.color }}
+            >
+              {meta.icon} {meta.label}{!manuallySet && brief.trim() ? ' (auto)' : ''}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowTypes(s => !s)}
+            disabled={disabled}
+            className="text-[11px] font-semibold text-ink-300 hover:text-ink-50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+          >
+            {showTypes ? 'Hide formats' : 'Choose format manually'}
+          </button>
+        </div>
+      </div>
+
+      {showTypes && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-ink-600">
+          {CONTENT_TYPES.map(ct => (
+            <TypeCard key={ct.id} ct={ct} selected={selected} onSelect={(t) => { onSelect(t); setShowTypes(false) }} disabled={disabled} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -343,6 +377,8 @@ export default function Home() {
   const [complete, setComplete] = useState(false)
   const [cachedAt, setCachedAt] = useState<string | null>(null)
   const [contentType, setContentType] = useState<ContentType>('kids_rhyme')
+  const [typeManuallySet, setTypeManuallySet] = useState(false)
+  const [detectingType, setDetectingType] = useState(false)
   const [userBrief, setUserBrief] = useState('')
   const [publishedPlatforms, setPublishedPlatforms] = useState<Set<Platform>>(new Set())
   const [capTab, setCapTab] = useState<Platform>('youtube')
@@ -376,7 +412,7 @@ export default function Home() {
       setJob(data.job ?? null)
       setCaptions(data.captions ?? null)
       setCachedAt(data.cachedAt ?? null)
-      if (data.contentType) setContentType(data.contentType)
+      if (data.contentType) { setContentType(data.contentType); setTypeManuallySet(true) }
       if (data.userBrief) setUserBrief(data.userBrief)
       if (data.publishedPlatforms?.length) setPublishedPlatforms(new Set(data.publishedPlatforms as Platform[]))
       setComplete(true)
@@ -493,9 +529,27 @@ export default function Home() {
     setRunning(true)
     abortRef.current = new AbortController()
     let createdJob: VideoJob | null = null
+    let typeToUse = contentType
     try {
+      if (!typeManuallySet && userBrief.trim()) {
+        setDetectingType(true)
+        try {
+          const detectRes = await fetch('/api/classify-type', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brief: userBrief.trim() }),
+            signal: abortRef.current.signal,
+          })
+          if (detectRes.ok) {
+            const detected = await detectRes.json() as { contentType?: ContentType }
+            if (detected.contentType) { typeToUse = detected.contentType; setContentType(detected.contentType) }
+          }
+        } catch { /* detection failed — fall back to the default type */ }
+        setDetectingType(false)
+      }
+
       const params = new URLSearchParams()
-      params.set('type', contentType)
+      params.set('type', typeToUse)
       if (userBrief.trim()) params.set('brief', userBrief.trim())
 
       const res = await fetch(`/api/pipeline/start?${params}`, { signal: abortRef.current.signal })
@@ -545,7 +599,7 @@ export default function Home() {
       setRunning(false)
       refreshUsage()
     }
-  }, [running, usage, reset, setStep, addLog, renderVideo, contentType, userBrief, refreshUsage])
+  }, [running, usage, reset, setStep, addLog, renderVideo, contentType, typeManuallySet, userBrief, refreshUsage])
 
   useEffect(() => {
     if (!complete || !rhyme) return
@@ -621,10 +675,12 @@ export default function Home() {
 
             <ContentTypeSelector
               selected={contentType}
-              onSelect={setContentType}
+              onSelect={(t) => { setContentType(t); setTypeManuallySet(true) }}
               brief={userBrief}
               onBriefChange={setUserBrief}
               disabled={running}
+              manuallySet={typeManuallySet}
+              detecting={detectingType}
             />
 
             {/* Quick-start templates */}
@@ -635,7 +691,7 @@ export default function Home() {
                   {TEMPLATES.map(t => (
                     <button
                       key={t.label}
-                      onClick={() => { setContentType(t.type); setUserBrief(t.brief) }}
+                      onClick={() => { setContentType(t.type); setTypeManuallySet(true); setUserBrief(t.brief) }}
                       className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-ink-500 bg-ink-600 text-ink-200 hover:border-accent-500 hover:text-accent-400 transition-colors"
                     >
                       {t.label}
