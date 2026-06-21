@@ -605,6 +605,9 @@ export default function Home() {
                 {running ? 'Creating...' : complete ? '✅ Ready' : 'Ready'}
               </span>
             </div>
+            <a href="/videos" className="text-[11px] font-semibold text-ink-300 hover:text-ink-50 transition-colors">
+              My Videos
+            </a>
             <AuthButton />
           </div>
         </div>

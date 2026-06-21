@@ -39,6 +39,18 @@ export async function loadJob(id: string): Promise<VideoJob | null> {
   return data.data as VideoJob
 }
 
+export async function listJobsByOwner(ownerKey: string, limit = 50): Promise<VideoJob[]> {
+  const supabase = getServiceClient()
+  const { data, error } = await supabase
+    .from('video_jobs')
+    .select('data')
+    .eq('owner_key', ownerKey)
+    .order('updated_at', { ascending: false })
+    .limit(limit)
+  if (error || !data) return []
+  return data.map((row) => row.data as VideoJob)
+}
+
 export async function saveClip(jobId: string, clipIndex: number, bytes: Buffer, mimeType: string): Promise<string> {
   const ext = mimeType.includes('mp4') ? 'mp4' : 'bin'
   const pathname = `jobs/${jobId}/clip-${String(clipIndex).padStart(3, '0')}.${ext}`
