@@ -30,16 +30,19 @@ const STATUS_META: Record<JobStatus, { label: string; color: string }> = {
 export default function VideosPage() {
   const [videos, setVideos] = useState<VideoSummary[] | null>(null)
   const [error, setError] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
+    setError('')
     fetch('/api/videos')
-      .then((res) => res.json())
-      .then((data: { jobs?: VideoSummary[]; error?: string }) => {
-        if (data.error) setError(data.error)
-        else setVideos(data.jobs ?? [])
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Server returned ${res.status}`)
+        const data = await res.json() as { jobs?: VideoSummary[]; error?: string }
+        if (data.error) throw new Error(data.error)
+        setVideos(data.jobs ?? [])
       })
-      .catch(() => setError('Could not load your videos'))
-  }, [])
+      .catch((err) => setError(`Could not load your videos (${err.message}).`))
+  }, [retryCount])
 
   return (
     <div className="min-h-screen bg-ink text-ink-50">
@@ -54,7 +57,17 @@ export default function VideosPage() {
         <h1 className="font-display text-2xl font-bold mb-1">My Videos</h1>
         <p className="text-ink-300 text-sm mb-8">Everything you&apos;ve generated, in one place.</p>
 
-        {error && <div className="text-rose-400 text-sm">{error}</div>}
+        {error && (
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-rose-400">{error}</span>
+            <button
+              onClick={() => { setVideos(null); setRetryCount((c) => c + 1) }}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-ink-500 bg-ink-700 text-ink-200 hover:border-accent-500 hover:text-accent-400 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {!error && videos === null && (
           <div className="flex items-center gap-2 text-ink-300 text-sm">

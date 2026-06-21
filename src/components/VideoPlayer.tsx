@@ -19,9 +19,14 @@ export default function VideoPlayer({ videoUrl }: { videoUrl: string }) {
   }
 
   return (
-    <div ref={containerRef} className="relative rounded-xl overflow-hidden bg-black">
-      <video controls autoPlay loop playsInline src={videoUrl}
-        className="w-full" style={{ aspectRatio: '9/16', objectFit: 'cover' }} />
+    // No ancestor `overflow-hidden` here — clipping a <video> with
+    // `controls` via a parent crops the native scrubber/controls bar
+    // (it sits flush at the very bottom edge with zero buffer, so any
+    // rounded-corner clip cuts into it). Rounding the video element's
+    // own corners instead avoids that entirely.
+    <div ref={containerRef} className="relative bg-black rounded-xl">
+      <video controls loop playsInline src={videoUrl}
+        className="w-full rounded-xl" style={{ aspectRatio: '9/16', objectFit: 'cover' }} />
       <button onClick={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white transition-all backdrop-blur-sm border border-white/20">
         {isFullscreen ? <X className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}

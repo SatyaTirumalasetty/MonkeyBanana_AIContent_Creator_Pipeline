@@ -554,7 +554,7 @@ export default function Home() {
         {hasVideo && (
           <section className="flex flex-col gap-3 items-center">
             <div
-              className="w-full max-w-[420px] rounded-2xl overflow-hidden"
+              className="w-full max-w-[420px] rounded-2xl"
               style={complete ? { boxShadow: '0 0 0 1px rgba(109,93,252,0.4), 0 0 48px -8px rgba(109,93,252,0.55)' } : undefined}
             >
               {job?.finalVideoUrl ? (
