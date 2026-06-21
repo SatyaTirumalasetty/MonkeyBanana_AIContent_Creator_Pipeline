@@ -272,6 +272,7 @@ export default function Home() {
   // Load cache and server-side usage on mount
   useEffect(() => {
     refreshUsage()
+    if (new URLSearchParams(window.location.search).get('resume')) return // handled by the resume effect below
     try {
       const saved = localStorage.getItem(CACHE_KEY)
       if (!saved) return
@@ -479,6 +480,56 @@ export default function Home() {
       refreshUsage()
     }
   }, [running, usage, reset, setStep, addLog, renderVideo, contentType, typeManuallySet, userBrief, refreshUsage])
+
+  // Resume an in-progress (or failed) job from /videos via ?resume=<jobId>.
+  // The clip-render-and-stitch loop is already idempotent per job (see
+  // renderClip's "still rendering — resuming..." retry path above), so
+  // resuming is just: load the existing job, then run the same renderVideo
+  // loop a fresh generation would — no new quota reservation involved.
+  // Captions aren't persisted on VideoJob (they're a stream-only artifact),
+  // so the captions panel won't reappear after a resume — acceptable, the
+  // goal here is recovering the video, not full state restoration.
+  useEffect(() => {
+    const resumeId = new URLSearchParams(window.location.search).get('resume')
+    if (!resumeId) return
+    window.history.replaceState(null, '', '/')
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    ;(async () => {
+      reset()
+      setRunning(true)
+      try {
+        const res = await fetch(`/api/pipeline/status?jobId=${resumeId}`, { signal: controller.signal })
+        if (!res.ok) { addLog('Could not find that job to resume.', 'error'); return }
+        const { job: resumedJob } = await res.json() as { job: VideoJob }
+
+        setRhyme(resumedJob.rhyme)
+        setRhymeScore(resumedJob.rhymeScore)
+        setStoryboard(resumedJob.storyboard)
+        setVideoMeta(resumedJob.videoMeta)
+        setJob(resumedJob)
+        if (resumedJob.contentType) { setContentType(resumedJob.contentType); setTypeManuallySet(true) }
+        if (resumedJob.userBrief) setUserBrief(resumedJob.userBrief)
+
+        if (resumedJob.finalVideoUrl) {
+          setStepsState({ rhyme: 'done', review: 'done', storyboard: 'done', video: 'done', vreview: 'done', render: 'done', publish: 'done' })
+          setComplete(true)
+          return
+        }
+
+        setStepsState({ rhyme: 'done', review: 'done', storyboard: 'done', video: 'done', vreview: 'done', render: 'idle', publish: 'done' })
+        addLog('Resuming your video...', 'info')
+        await renderVideo(resumedJob, controller.signal)
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') addLog(`Resume failed: ${(err as Error).message}`, 'error')
+      } finally {
+        setRunning(false)
+        refreshUsage()
+      }
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!complete || !rhyme) return

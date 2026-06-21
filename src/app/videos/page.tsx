@@ -125,6 +125,14 @@ export default function VideosPage() {
                         Download →
                       </a>
                     )}
+                    {v.status !== 'complete' && (
+                      <a
+                        href={`/?resume=${v.id}`}
+                        className="mt-auto pt-2 text-[11px] font-semibold text-accent-400 hover:text-accent-400/80 transition-colors"
+                      >
+                        {v.status === 'error' ? 'Retry →' : 'Resume →'}
+                      </a>
+                    )}
                   </div>
                 </div>
               )
