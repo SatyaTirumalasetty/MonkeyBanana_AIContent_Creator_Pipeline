@@ -16,23 +16,29 @@ export async function POST(req: NextRequest) {
   const planConfig = PLANS[plan]
   const origin = req.headers.get('origin') ?? 'http://localhost:3000'
 
-  // Get authenticated user if available
-  let customerEmail: string | undefined
+  // Require sign-in before checkout. The webhook links a completed payment
+  // back to a profile by matching Stripe's customer email against
+  // profiles.email — a guest checkout has no profile to match (or might pay
+  // with a different email than their eventual account), so the payment
+  // would succeed with no plan ever granted. Requiring a session up front
+  // means customerEmail always matches an existing profiles row.
+  let customerEmail: string
   let stripeCustomerId: string | undefined
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user?.email) {
-      customerEmail = user.email
-      // Look up existing Stripe customer
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('stripe_customer_id')
-        .eq('id', user.id)
-        .single()
-      if (profile?.stripe_customer_id) stripeCustomerId = profile.stripe_customer_id
-    }
-  } catch { /* Supabase not configured or user not logged in — proceed as guest */ }
+    if (!user?.email) return NextResponse.json({ error: 'Sign in required', code: 'auth_required' }, { status: 401 })
+    customerEmail = user.email
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('stripe_customer_id')
+      .eq('id', user.id)
+      .single()
+    if (profile?.stripe_customer_id) stripeCustomerId = profile.stripe_customer_id
+  } catch {
+    return NextResponse.json({ error: 'Sign in required', code: 'auth_required' }, { status: 401 })
+  }
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',

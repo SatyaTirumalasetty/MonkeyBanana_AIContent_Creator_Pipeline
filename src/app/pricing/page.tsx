@@ -113,9 +113,11 @@ function PricingContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: planKey }),
       })
-      const data = await res.json() as { url?: string; error?: string }
+      const data = await res.json() as { url?: string; error?: string; code?: string }
       if (data.url) {
         window.location.href = data.url
+      } else if (data.code === 'auth_required') {
+        window.location.href = `/signin?next=${encodeURIComponent('/pricing')}`
       } else {
         alert(data.error ?? 'Something went wrong. Please try again.')
         setLoading(null)
