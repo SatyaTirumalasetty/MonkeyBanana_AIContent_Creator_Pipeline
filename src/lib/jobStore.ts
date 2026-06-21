@@ -12,7 +12,16 @@ function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
+    {
+      auth: { persistSession: false },
+      // Next.js caches fetch() calls by default, including ones made
+      // internally by this client -- even inside routes marked
+      // dynamic = 'force-dynamic', which only controls the route's own
+      // render, not third-party fetches within it. Without this, reads
+      // here (job status/clips) can silently return a stale snapshot
+      // from an earlier request to the same Supabase URL.
+      global: { fetch: (url, opts) => fetch(url, { ...opts, cache: 'no-store' }) },
+    }
   )
 }
 

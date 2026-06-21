@@ -20,7 +20,13 @@ function serviceClient() {
   return createSupabaseJs(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
+    {
+      auth: { persistSession: false },
+      // See the matching comment in jobStore.ts -- Next.js's fetch cache
+      // can serve a stale response for this client's internal requests
+      // (usage counts, plan lookups) even from a force-dynamic route.
+      global: { fetch: (url, opts) => fetch(url, { ...opts, cache: 'no-store' }) },
+    }
   )
 }
 
