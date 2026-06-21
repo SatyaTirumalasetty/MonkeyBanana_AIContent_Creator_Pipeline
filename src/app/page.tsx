@@ -392,6 +392,7 @@ export default function Home() {
     }
     setJob(data.job)
     setStep('render', 'done')
+    setComplete(true)
     addLog('🎉 Pipeline complete! Final video ready.', 'success')
   }, [renderClip, addLog, setStep])
 
@@ -456,7 +457,12 @@ export default function Home() {
               case 'video_score': setVideoScore(chunk.payload as VideoScore); break
               case 'job':    createdJob = chunk.payload as VideoJob; setJob(createdJob); break
               case 'captions': setCaptions(chunk.payload as SocialCaptions); break
-              case 'complete': setComplete(true); break
+              // 'complete' here means the content/script/captions stage is
+              // done, not the whole pipeline — clip rendering + stitching
+              // (renderVideo, below) still has to run. `complete` (the
+              // state driving "Video ready" UI) is only set true once that
+              // actually finishes, so the signal isn't a false positive
+              // while clips are still in flight.
               case 'error':  addLog(`Error: ${(chunk.payload as { message: string }).message}`, 'error'); break
             }
           } catch { /* skip malformed */ }
