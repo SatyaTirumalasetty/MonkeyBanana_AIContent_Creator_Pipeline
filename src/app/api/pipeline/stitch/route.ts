@@ -5,7 +5,7 @@ import path from 'path'
 import ffmpegPath from '@ffmpeg-installer/ffmpeg'
 import ffmpeg from 'fluent-ffmpeg'
 import { loadJob, saveJob, saveFinalVideo } from '@/lib/jobStore'
-import { resolveOwner } from '@/lib/usage'
+import { resolveOwner, refundUsage } from '@/lib/usage'
 
 ffmpeg.setFfmpegPath(ffmpegPath.path)
 
@@ -61,6 +61,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not all clips are ready' }, { status: 409 })
   }
 
+  // A retried stitch after a prior failure already had its slot refunded —
+  // don't refund twice.
+  const alreadyRefunded = job.status === 'error'
+
   job.status = 'stitching'
   await saveJob(job)
 
@@ -103,6 +107,7 @@ export async function POST(req: NextRequest) {
     job.status = 'error'
     job.error = err instanceof Error ? err.message : 'Stitch failed'
     await saveJob(job)
+    if (!alreadyRefunded) await refundUsage(owner, job.useKling)
     return NextResponse.json({ error: job.error }, { status: 500 })
   } finally {
     await fs.rm(workDir, { recursive: true, force: true })

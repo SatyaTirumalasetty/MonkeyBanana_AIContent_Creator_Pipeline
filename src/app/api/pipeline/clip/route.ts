@@ -6,7 +6,7 @@ import path from 'path'
 import ffmpegPath from '@ffmpeg-installer/ffmpeg'
 import ffmpeg from 'fluent-ffmpeg'
 import { loadJob, saveJob, saveClip, saveReferenceImage } from '@/lib/jobStore'
-import { resolveOwner } from '@/lib/usage'
+import { resolveOwner, refundUsage } from '@/lib/usage'
 import type { StoryboardShot, Storyboard, ContentType } from '@/types'
 
 ffmpeg.setFfmpegPath(ffmpegPath.path)
@@ -203,6 +203,14 @@ export async function POST(req: NextRequest) {
 
   if (job.clips.every(c => c.status === 'done')) {
     job.status = 'stitching'
+  } else if (clip.status === 'error' && job.status !== 'error') {
+    // A permanently failed clip has no retry path today — surface it as a
+    // terminal job failure (matching the stitch route) and give back the
+    // reserved slot. The job.status !== 'error' guard makes this idempotent
+    // if a resume/retry hits an already-failed job again.
+    job.status = 'error'
+    job.error = clip.error
+    await refundUsage(owner, job.useKling)
   }
   await saveJob(job)
 

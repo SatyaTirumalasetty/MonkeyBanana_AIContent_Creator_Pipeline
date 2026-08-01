@@ -6,7 +6,7 @@ import {
 } from '@/lib/agents'
 import type { VideoScore } from '@/types'
 import { createJobId, saveJob, saveNarrationAudio } from '@/lib/jobStore'
-import { resolveOwner, checkAndReserveUsage, ANON_COOKIE } from '@/lib/usage'
+import { resolveOwner, checkAndReserveUsage, refundUsage, ANON_COOKIE } from '@/lib/usage'
 import type { ClipState, VideoJob, ContentType, CreativeBrief } from '@/types'
 
 export const runtime = 'nodejs'
@@ -185,6 +185,9 @@ export async function GET(req: NextRequest) {
         const msg = err instanceof Error ? err.message : 'Unknown error'
         log(`Pipeline error: ${msg}`, 'error')
         send('error', { message: msg })
+        // Pre-production failed before (or while) creating the job — the
+        // reserved slot was never used, so give it back.
+        await refundUsage(owner, quota.useKling)
       } finally {
         controller.close()
       }

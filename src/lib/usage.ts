@@ -93,6 +93,19 @@ export async function checkAndReserveUsage(owner: OwnerContext): Promise<QuotaRe
   return { allowed: true, useKling: result.use_kling, useFlux: owner.plan !== 'free' }
 }
 
+// Gives back a reserved slot when generation fails after checkAndReserveUsage
+// succeeded (e.g. pre-production error, clip render failure, stitch failure).
+// Best-effort: a refund failure shouldn't mask the original pipeline error.
+export async function refundUsage(owner: OwnerContext, useKling: boolean): Promise<void> {
+  const month = new Date().toISOString().slice(0, 7)
+  const { error } = await serviceClient().rpc('refund_usage', {
+    p_owner_key: owner.ownerKey,
+    p_month: month,
+    p_kling: useKling,
+  })
+  if (error) console.error(`refund_usage failed for ${owner.ownerKey}/${month}: ${error.message}`)
+}
+
 export async function getUsageSnapshot(owner: OwnerContext) {
   const month = new Date().toISOString().slice(0, 7)
   const { data } = await serviceClient()
